@@ -25,6 +25,29 @@ CLAUDERC_DEST="$HOME/.claude"
 info()  { echo "[init-me] $*"; }
 die()   { echo "[init-me] ERROR: $*" >&2; exit 1; }
 
+clone_or_prompt() {
+  local repo="$1" dest="$2"
+  if [[ -d "$dest/.git" ]]; then
+    # Warn if there are uncommitted changes
+    local dirty=""
+    git -C "$dest" status --porcelain 2>/dev/null | grep -q . && dirty=" (WARNING: has uncommitted changes)"
+    read -r -p "[init-me] $repo already exists at $dest$dirty — re-clone? [y/N] " answer
+    case "$answer" in
+      [yY])
+        info "Re-cloning $repo..."
+        rm -rf "$dest"
+        gh repo clone "$GITHUB_USER/$repo" "$dest"
+        ;;
+      *)
+        info "Skipping $repo."
+        ;;
+    esac
+  else
+    info "Cloning $repo → $dest..."
+    gh repo clone "$GITHUB_USER/$repo" "$dest"
+  fi
+}
+
 ## OS CHECK ##
 
 case "$OSTYPE" in
@@ -79,12 +102,7 @@ for repo in "${PRIVATE_REPOS[@]}"; do
     dest="$REPOS_DIR/$repo"
   fi
 
-  if [[ -d "$dest/.git" ]]; then
-    info "$repo already cloned at $dest, skipping."
-  else
-    info "Cloning $repo → $dest..."
-    gh repo clone "$GITHUB_USER/$repo" "$dest"
-  fi
+  clone_or_prompt "$repo" "$dest"
 done
 
 ## HAND OFF ##
