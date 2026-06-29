@@ -94,7 +94,8 @@ fi
 
 ## ADD SSH KEY TO AGENT ##
 
-ssh-add ~/.ssh/id_* &>/dev/null || true
+info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
+ssh-add ~/.ssh/id_* || true
 
 ## CLONE REPOS ##
 
