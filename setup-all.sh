@@ -73,11 +73,13 @@ else
 fi
 
 # scriptorium: symlink ~/Scripts if not already done
-if [[ ! -L "$HOME/Scripts" ]]; then
+if [[ -L "$HOME/Scripts" ]]; then
+  info "Step 3: ~/Scripts already symlinked, skipping"
+elif [[ -e "$HOME/Scripts" ]]; then
+  warn "~/Scripts exists but is not a symlink — skipping to avoid overwriting"
+else
   info "Step 3: Symlinking ~/Scripts → $REPOS_DIR/scriptorium/scripts..."
   ln -s "$REPOS_DIR/scriptorium/scripts" "$HOME/Scripts"
-else
-  info "Step 3: ~/Scripts already symlinked, skipping"
 fi
 
 # clauderc: no setup needed (it's just configs, auto-loaded from ~/.claude)
