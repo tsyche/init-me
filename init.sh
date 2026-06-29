@@ -84,7 +84,7 @@ else
 fi
 
 # Ensure gh config directory exists (gh needs this before auth)
-mkdir -p ~/.config/gh
+mkdir -p "$HOME/.config/gh"
 
 ## GITHUB AUTH ##
 
@@ -97,23 +97,23 @@ fi
 
 # Ensure SSH key permissions are correct (gh creates them too permissive)
 info "Fixing SSH key permissions..."
-chmod 700 ~/.ssh
-chmod 600 ~/.ssh/id_ed25519 2>/dev/null || true
-chmod 644 ~/.ssh/id_ed25519.pub 2>/dev/null || true
+chmod 700 "$HOME/.ssh"
+chmod 600 "$HOME/.ssh/id_ed25519" 2>/dev/null || true
+chmod 644 "$HOME/.ssh/id_ed25519.pub" 2>/dev/null || true
 
 ## ADD SSH KEY TO AGENT ##
 
 info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
-ssh-add ~/.ssh/id_* || true
+ssh-add "$HOME/.ssh"/id_* || true
 
 ## FIX SSH CONFIG ##
 
 # If ~/.ssh/config includes a file that doesn't exist yet, comment it out temporarily
 # (bootstrap.sh will recreate it properly)
-if [[ -f ~/.ssh/config ]] && grep -q "Include.*dotfile-matrix" ~/.ssh/config; then
-  if ! [[ -f ~/.ssh/config.bak ]]; then
-    cp ~/.ssh/config ~/.ssh/config.bak
-    sed -i '' 's/^Include.*dotfile-matrix.*$/#&/' ~/.ssh/config
+if [[ -f "$HOME/.ssh/config" ]] && grep -q "Include.*dotfile-matrix" "$HOME/.ssh/config"; then
+  if ! [[ -f "$HOME/.ssh/config.bak" ]]; then
+    cp "$HOME/.ssh/config" "$HOME/.ssh/config.bak"
+    sed -i '' 's/^Include.*dotfile-matrix.*$/#&/' "$HOME/.ssh/config"
   fi
 fi
 
