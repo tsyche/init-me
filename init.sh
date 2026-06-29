@@ -92,6 +92,9 @@ else
   info "Already authenticated with GitHub, skipping."
 fi
 
+# Ensure gh config directory exists (gh needs this)
+mkdir -p ~/.config/gh
+
 # Ensure SSH key permissions are correct (gh creates them too permissive)
 info "Fixing SSH key permissions..."
 chmod 700 ~/.ssh
