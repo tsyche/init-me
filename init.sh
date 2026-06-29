@@ -93,9 +93,10 @@ else
 fi
 
 # Ensure SSH key permissions are correct (gh creates them too permissive)
-chmod 700 ~/.ssh 2>/dev/null || true
-chmod 600 ~/.ssh/id_* 2>/dev/null || true
-chmod 644 ~/.ssh/id_*.pub 2>/dev/null || true
+info "Fixing SSH key permissions..."
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/id_ed25519 2>/dev/null || true
+chmod 644 ~/.ssh/id_ed25519.pub 2>/dev/null || true
 
 ## ADD SSH KEY TO AGENT ##
 
