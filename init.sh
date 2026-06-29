@@ -86,6 +86,8 @@ fi
 # Ensure gh config directory exists and is writable (gh needs this before auth)
 mkdir -p "$HOME/.config/gh"
 chmod 700 "$HOME/.config/gh"
+# Remove any broken symlinks (bootstrap.sh will recreate them properly)
+rm -f "$HOME/.config/gh/config.yml"
 
 ## GITHUB AUTH ##
 
