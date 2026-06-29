@@ -103,6 +103,17 @@ chmod 644 ~/.ssh/id_ed25519.pub 2>/dev/null || true
 info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
 ssh-add ~/.ssh/id_* || true
 
+## FIX SSH CONFIG ##
+
+# If ~/.ssh/config includes a file that doesn't exist yet, comment it out temporarily
+# (bootstrap.sh will recreate it properly)
+if [[ -f ~/.ssh/config ]] && grep -q "Include.*dotfile-matrix" ~/.ssh/config; then
+  if ! [[ -f ~/.ssh/config.bak ]]; then
+    cp ~/.ssh/config ~/.ssh/config.bak
+    sed -i '' 's/^Include.*dotfile-matrix.*$/#&/' ~/.ssh/config
+  fi
+fi
+
 ## CLONE REPOS ##
 
 mkdir -p "$REPOS_DIR"
