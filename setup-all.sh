@@ -67,7 +67,7 @@ info "Step 1: dotfile-matrix bootstrap..."
 # configgy-smalls: sync if it has a sync script
 if [[ -f "$REPOS_DIR/configgy-smalls/sync.sh" ]]; then
   info "Step 2: configgy-smalls sync..."
-  "$REPOS_DIR/configgy-smalls/sync.sh" || warn "configgy-smalls sync had issues"
+  "$REPOS_DIR/configgy-smalls/sync.sh" apply || warn "configgy-smalls sync had issues"
 else
   info "Step 2: configgy-smalls (no sync.sh, skipping)"
 fi
@@ -88,6 +88,6 @@ info "Step 4: clauderc (no setup needed, already in place)"
 info "Setup complete!"
 info ""
 info "Next steps:"
-info "  1. Restart your shell: exec zsh"
+info "  1. Restart your shell: zexec"
 info "  2. Configure machine-specific settings: edit ~/.zshrc.local and ~/.gitconfig.local"
 info "  3. Run /system-cleanup anytime to audit disk usage"
