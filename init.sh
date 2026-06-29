@@ -107,6 +107,6 @@ done
 
 ## HAND OFF ##
 
-info "All repos cloned. Kicking off dotfile-matrix/bootstrap.sh..."
+info "All repos cloned. Kicking off setup-all.sh..."
 echo ""
-exec "$REPOS_DIR/dotfile-matrix/bootstrap.sh"
+exec "$REPOS_DIR/init-me/setup-all.sh"
