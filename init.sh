@@ -108,7 +108,7 @@ chmod 644 "$HOME/.ssh/id_ed25519.pub" 2>/dev/null || true
 
 info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
 # Only add ed25519 key at this stage (symlinks for id_personal/id_work don't exist yet)
-ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null || true
+ssh-add "$HOME/.ssh/id_ed25519" || true
 
 ## FIX SSH CONFIG ##
 
