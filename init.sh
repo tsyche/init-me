@@ -13,6 +13,7 @@ GITHUB_USER="tsyche"
 REPOS_DIR="$HOME/Repos"
 
 PRIVATE_REPOS=(
+  "init-me"
   "dotfile-matrix"
   "clauderc"
   "configgy-smalls"
