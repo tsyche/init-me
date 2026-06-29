@@ -92,6 +92,10 @@ else
   info "Already authenticated with GitHub, skipping."
 fi
 
+## ADD SSH KEY TO AGENT ##
+
+ssh-add ~/.ssh/id_* &>/dev/null || true
+
 ## CLONE REPOS ##
 
 mkdir -p "$REPOS_DIR"
