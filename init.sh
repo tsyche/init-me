@@ -92,6 +92,11 @@ else
   info "Already authenticated with GitHub, skipping."
 fi
 
+# Ensure SSH key permissions are correct (gh creates them too permissive)
+chmod 700 ~/.ssh 2>/dev/null || true
+chmod 600 ~/.ssh/id_* 2>/dev/null || true
+chmod 644 ~/.ssh/id_*.pub 2>/dev/null || true
+
 ## ADD SSH KEY TO AGENT ##
 
 info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
