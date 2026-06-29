@@ -83,6 +83,9 @@ else
   info "gh already installed, skipping."
 fi
 
+# Ensure gh config directory exists (gh needs this before auth)
+mkdir -p ~/.config/gh
+
 ## GITHUB AUTH ##
 
 if ! gh auth status &>/dev/null; then
@@ -91,9 +94,6 @@ if ! gh auth status &>/dev/null; then
 else
   info "Already authenticated with GitHub, skipping."
 fi
-
-# Ensure gh config directory exists (gh needs this)
-mkdir -p ~/.config/gh
 
 # Ensure SSH key permissions are correct (gh creates them too permissive)
 info "Fixing SSH key permissions..."
