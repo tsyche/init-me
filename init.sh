@@ -83,8 +83,9 @@ else
   info "gh already installed, skipping."
 fi
 
-# Ensure gh config directory exists (gh needs this before auth)
+# Ensure gh config directory exists and is writable (gh needs this before auth)
 mkdir -p "$HOME/.config/gh"
+chmod 700 "$HOME/.config/gh"
 
 ## GITHUB AUTH ##
 
