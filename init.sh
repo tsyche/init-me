@@ -54,10 +54,31 @@ clone_or_prompt() {
 case "$OSTYPE" in
   darwin*) OS=mac ;;
   linux*)  OS=linux ;;
+  msys*|cygwin*|mingw*)
+    echo ""
+    echo "Windows detected. Native Windows bootstrap is not yet implemented."
+    echo "Options:"
+    echo "  1. Run this inside WSL2 (Ubuntu) — same as Linux path"
+    echo "  2. Watch https://github.com/tsyche/init-me for a future init-windows.ps1"
+    echo ""
+    exit 1
+    ;;
   *)
-    die "Unsupported OS: $OSTYPE. On Windows, run this inside WSL or Git Bash (native Windows support is a future add)."
+    die "Unsupported OS: $OSTYPE"
     ;;
 esac
+
+## LINUX PREREQUISITES ##
+
+if [[ "$OS" == "linux" ]]; then
+  if command -v apt-get &>/dev/null; then
+    info "Installing apt prerequisites..."
+    sudo apt-get update -qq
+    sudo apt-get install -y build-essential curl git procps file
+  else
+    die "Non-apt Linux detected. Install build-essential, curl, git manually then re-run."
+  fi
+fi
 
 ## HOMEBREW ##
 
@@ -92,8 +113,13 @@ rm -f "$HOME/.config/gh/config.yml"
 ## GITHUB AUTH ##
 
 if ! gh auth status &>/dev/null; then
-  info "Authenticating with GitHub (browser will open)..."
-  gh auth login --git-protocol ssh --web
+  info "Authenticating with GitHub..."
+  if [[ "$OS" == "mac" ]] || [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+    gh auth login --git-protocol ssh --web
+  else
+    info "(No display detected — gh will offer a device flow URL to authenticate headlessly)"
+    gh auth login --git-protocol ssh
+  fi
 else
   info "Already authenticated with GitHub, skipping."
 fi
@@ -117,7 +143,11 @@ ssh-add "$HOME/.ssh/id_ed25519" || true
 if [[ -f "$HOME/.ssh/config" ]] && grep -q "Include.*dotfile-matrix" "$HOME/.ssh/config"; then
   if ! [[ -f "$HOME/.ssh/config.bak" ]]; then
     cp "$HOME/.ssh/config" "$HOME/.ssh/config.bak"
-    sed -i '' 's/^Include.*dotfile-matrix.*$/#&/' "$HOME/.ssh/config"
+    if [[ "$OS" == "mac" ]]; then
+      sed -i '' 's/^Include.*dotfile-matrix.*$/#&/' "$HOME/.ssh/config"
+    else
+      sed -i 's/^Include.*dotfile-matrix.*$/#&/' "$HOME/.ssh/config"
+    fi
   fi
 fi
 
