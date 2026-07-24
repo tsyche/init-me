@@ -186,11 +186,14 @@ rm -f "$HOME/.config/gh/config.yml"
 
 if ! gh auth status &>/dev/null; then
   info "Authenticating with GitHub..."
+  # admin:public_key is needed below for `gh ssh-key add` — the device-flow
+  # login (headless Linux path) doesn't grant it by default, and without it
+  # the key-upload step 404s after already having generated a local key.
   if [[ "$OS" == "mac" ]] || [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
-    gh auth login --git-protocol ssh --web
+    gh auth login --git-protocol ssh --web --scopes "admin:public_key"
   else
     info "(No display detected — gh will offer a device flow URL to authenticate headlessly)"
-    gh auth login --git-protocol ssh
+    gh auth login --git-protocol ssh --scopes "admin:public_key"
   fi
 else
   info "Already authenticated with GitHub, skipping."
@@ -203,7 +206,21 @@ mkdir -p "$HOME/.ssh"
 if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
   info "No SSH key present after GitHub auth — generating one (passphrase optional, prompted below)..."
   ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519" -C "$(whoami)@$(hostname -s 2>/dev/null || hostname)"
-  gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$(hostname -s 2>/dev/null || hostname) ($(date +%Y-%m-%d))"
+  key_title="$(hostname -s 2>/dev/null || hostname) ($(date +%Y-%m-%d))"
+  if ! gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$key_title" 2>/tmp/gh-ssh-key-add.err; then
+    # A token from a prior run (before this scope was requested at login)
+    # won't have admin:public_key — refresh it in place rather than require
+    # a full re-auth, then retry the same upload once.
+    if grep -q "admin:public_key" /tmp/gh-ssh-key-add.err; then
+      info "Existing GitHub token lacks admin:public_key — refreshing scope..."
+      gh auth refresh -h github.com -s admin:public_key
+      gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$key_title"
+    else
+      cat /tmp/gh-ssh-key-add.err >&2
+      exit 1
+    fi
+  fi
+  rm -f /tmp/gh-ssh-key-add.err
 fi
 
 # github.com isn't in known_hosts on a fresh box, so the first `git clone`
