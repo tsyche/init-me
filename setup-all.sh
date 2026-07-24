@@ -39,7 +39,10 @@ sync_repo() {
   fi
 
   info "Cloning $repo → $dest..."
-  gh repo clone "$GITHUB_USER/$repo" "$dest" || die "Failed to clone $repo"
+  # Plain git clone, not `gh repo clone` — see init.sh's sync_repo for why
+  # (avoids an unnecessary GraphQL API dependency for a step that doesn't
+  # need it).
+  git clone "git@github.com:$GITHUB_USER/$repo.git" "$dest" || die "Failed to clone $repo"
 }
 
 _adopt_existing_dir() {
@@ -47,7 +50,7 @@ _adopt_existing_dir() {
   local tmp
   tmp="$(mktemp -d)"
   info "$dest already has content but isn't a git checkout — adopting $repo without overwriting anything..."
-  gh repo clone "$GITHUB_USER/$repo" "$tmp" --quiet || { warn "Failed to clone $repo for adoption"; rm -rf "$tmp"; return; }
+  git clone --quiet "git@github.com:$GITHUB_USER/$repo.git" "$tmp" || { warn "Failed to clone $repo for adoption"; rm -rf "$tmp"; return; }
 
   local backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
   local staged=0

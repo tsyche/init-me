@@ -57,7 +57,12 @@ sync_repo() {
   fi
 
   info "Cloning $repo → $dest..."
-  gh repo clone "$GITHUB_USER/$repo" "$dest"
+  # Plain git clone, not `gh repo clone` — the latter does a GraphQL lookup
+  # to resolve the repo before cloning, an extra GitHub API dependency this
+  # doesn't need since the SSH URL is already known. Found live: repeated
+  # heavy gh usage exhausted a GraphQL rate limit and blocked cloning even
+  # though a working SSH key already existed.
+  git clone "git@github.com:$GITHUB_USER/$repo.git" "$dest"
 }
 
 _adopt_existing_dir() {
@@ -65,7 +70,7 @@ _adopt_existing_dir() {
   local tmp
   tmp="$(mktemp -d)"
   info "$dest already has content but isn't a git checkout — adopting $repo without overwriting anything..."
-  gh repo clone "$GITHUB_USER/$repo" "$tmp" --quiet
+  git clone --quiet "git@github.com:$GITHUB_USER/$repo.git" "$tmp"
 
   local backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
   local staged=0
@@ -157,12 +162,22 @@ fi
 if ! command -v brew &>/dev/null; then
   info "Installing Homebrew..."
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  # Add brew to PATH for the rest of this script
   if [[ "$OS" == "mac" ]]; then
-    eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null || /usr/local/bin/brew shellenv)"
+    [[ -x /opt/homebrew/bin/brew ]] && BREW_BIN=/opt/homebrew/bin/brew || BREW_BIN=/usr/local/bin/brew
+    SHELLENV_RC="$HOME/.zprofile"
   else
-    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+    BREW_BIN=/home/linuxbrew/.linuxbrew/bin/brew
+    SHELLENV_RC="$HOME/.bashrc"
   fi
+  # Add brew to PATH for the rest of this script...
+  eval "$("$BREW_BIN" shellenv)"
+  # ...and persist it for real, not just this process. Without this, any NEW
+  # shell opened before the tracked zshrc gets symlinked (much later in this
+  # pipeline) has no idea brew/gh exist — found live when a step failed
+  # mid-bootstrap and a fresh SSH session couldn't find `gh`, despite it
+  # being fully installed on disk.
+  SHELLENV_LINE="eval \"\$($BREW_BIN shellenv)\""
+  grep -qF "$SHELLENV_LINE" "$SHELLENV_RC" 2>/dev/null || echo "$SHELLENV_LINE" >> "$SHELLENV_RC"
 else
   info "Homebrew already installed, skipping."
 fi
@@ -183,6 +198,22 @@ chmod 700 "$HOME/.config/gh"
 rm -f "$HOME/.config/gh/config.yml"
 
 ## GITHUB AUTH ##
+
+# A stale/invalid token from an earlier partial run can leave gh permanently
+# stuck — a known gh CLI bug (github.com/cli/cli/issues/8441): its internal
+# config-migration step verifies the existing token first, and if that check
+# fails, gh "cowardly refuses" to proceed at all, blocking every subsequent
+# gh command including a fresh login. Found live, required manual
+# `rm -rf ~/.config/gh` to recover — detect and self-heal instead.
+if ! gh auth status &>/tmp/gh-auth-status.err; then
+  if grep -q "cowardly refusing to continue" /tmp/gh-auth-status.err; then
+    info "gh's local config is stuck on a broken stored token — resetting it..."
+    rm -rf "$HOME/.config/gh"
+    mkdir -p "$HOME/.config/gh"
+    chmod 700 "$HOME/.config/gh"
+  fi
+fi
+rm -f /tmp/gh-auth-status.err
 
 if ! gh auth status &>/dev/null; then
   info "Authenticating with GitHub..."
