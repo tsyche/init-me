@@ -9,6 +9,21 @@
 # Windows: run inside WSL or Git Bash first (native Windows support is a future add)
 set -euo pipefail
 
+# Capture this run to a timestamped log, always — no more manually
+# remembering `| tee` after losing scrollback mid-debug. Guarded by
+# BOOTSTRAP_LOG_ACTIVE so that when this script hands off to setup-all.sh
+# (which hands off to bootstrap.sh), each only sets up logging if it's the
+# actual entrypoint — otherwise they just inherit the already-redirected
+# output, avoiding nested/duplicate log files.
+if [[ -z "${BOOTSTRAP_LOG_ACTIVE:-}" ]]; then
+  export BOOTSTRAP_LOG_ACTIVE=1
+  LOG_DIR="$HOME/bootstrap-logs"
+  mkdir -p "$LOG_DIR"
+  LOG_FILE="$LOG_DIR/init-me-$(date +%Y%m%d-%H%M%S).log"
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  echo "Logging this run to $LOG_FILE"
+fi
+
 GITHUB_USER="tsyche"
 REPOS_DIR="$HOME/Repos"
 

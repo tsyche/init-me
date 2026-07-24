@@ -8,6 +8,19 @@
 # Supports: macOS, Linux
 set -euo pipefail
 
+# Capture this run to a timestamped log, always. Guarded so that when this
+# runs as part of init.sh's handoff, it inherits init.sh's already-active log
+# instead of starting a redundant second one — only sets up its own when run
+# standalone (see init.sh for the full rationale).
+if [[ -z "${BOOTSTRAP_LOG_ACTIVE:-}" ]]; then
+  export BOOTSTRAP_LOG_ACTIVE=1
+  LOG_DIR="$HOME/bootstrap-logs"
+  mkdir -p "$LOG_DIR"
+  LOG_FILE="$LOG_DIR/setup-all-$(date +%Y%m%d-%H%M%S).log"
+  exec > >(tee -a "$LOG_FILE") 2>&1
+  echo "Logging this run to $LOG_FILE"
+fi
+
 GITHUB_USER="tsyche"
 REPOS_DIR="$HOME/Repos"
 CLAUDERC_DEST="$HOME/.claude"
