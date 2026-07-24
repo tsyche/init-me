@@ -132,11 +132,23 @@ esac
 
 if [[ "$OS" == "linux" ]]; then
   if command -v apt-get &>/dev/null; then
-    info "Installing apt prerequisites..."
-    sudo apt-get update -qq
-    sudo apt-get install -y build-essential curl git procps file
+    # zsh: dotfile-matrix's bootstrap.sh installs oh-my-zsh next, which needs
+    # zsh to already exist. bubblewrap: Homebrew's own installer recommends
+    # it for sandboxed formula builds on Linux. Both are only relevant on a
+    # genuinely fresh box — check first rather than assume either is missing.
+    missing=()
+    for pkg in build-essential curl git procps file zsh bubblewrap; do
+      dpkg -s "$pkg" &>/dev/null || missing+=("$pkg")
+    done
+    if [[ ${#missing[@]} -gt 0 ]]; then
+      info "Installing apt prerequisites: ${missing[*]}..."
+      sudo apt-get update -qq
+      sudo apt-get install -y "${missing[@]}"
+    else
+      info "All apt prerequisites already installed, skipping."
+    fi
   else
-    die "Non-apt Linux detected. Install build-essential, curl, git manually then re-run."
+    die "Non-apt Linux detected. Install build-essential, curl, git, zsh manually then re-run."
   fi
 fi
 
@@ -191,6 +203,25 @@ chmod 600 "$HOME/.ssh/id_ed25519" 2>/dev/null || true
 chmod 644 "$HOME/.ssh/id_ed25519.pub" 2>/dev/null || true
 
 ## ADD SSH KEY TO AGENT ##
+
+# Exit status 2 from `ssh-add -l` specifically means "no agent reachable" (1
+# means an agent is up but holds no identities yet — that's fine, don't
+# start a redundant one). macOS always has one via launchd; a bare Linux
+# server doesn't unless something started one, so check rather than assume.
+agent_status=0
+ssh-add -l &>/dev/null || agent_status=$?
+if [[ "$agent_status" -eq 2 ]]; then
+  # This script runs via `bash <(curl ...)` — a new process each time, so it
+  # never inherits a prior run's SSH_AUTH_SOCK. Without this, re-running the
+  # bootstrap after a failure leaks one orphaned ssh-agent per attempt.
+  # Kill any of ours from earlier attempts before starting a single fresh one.
+  if pgrep -u "$(id -u)" -x ssh-agent &>/dev/null; then
+    info "Found orphaned ssh-agent process(es) from a previous run — killing before starting fresh..."
+    pkill -u "$(id -u)" -x ssh-agent || true
+  fi
+  info "No ssh-agent reachable — starting one..."
+  eval "$(ssh-agent -s)" >/dev/null
+fi
 
 info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
 # Only add ed25519 key at this stage (symlinks for id_personal/id_work don't exist yet)
