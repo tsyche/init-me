@@ -196,6 +196,22 @@ else
   info "Already authenticated with GitHub, skipping."
 fi
 
+# gh's SSH-key setup prompts don't reliably fire during headless device-flow
+# auth (found live: auth succeeded but no key existed afterward) — don't
+# assume gh generated one, generate + register it ourselves if it didn't.
+mkdir -p "$HOME/.ssh"
+if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+  info "No SSH key present after GitHub auth — generating one (passphrase optional, prompted below)..."
+  ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519" -C "$(whoami)@$(hostname -s 2>/dev/null || hostname)"
+  gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$(hostname -s 2>/dev/null || hostname) ($(date +%Y-%m-%d))"
+fi
+
+# github.com isn't in known_hosts on a fresh box, so the first `git clone`
+# over SSH fails host-key verification before it ever gets to auth — add it
+# up front rather than let that be the first-run surprise.
+touch "$HOME/.ssh/known_hosts"
+grep -q "^github.com " "$HOME/.ssh/known_hosts" 2>/dev/null || ssh-keyscan -t ed25519 github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
+
 # Ensure SSH key permissions are correct (gh creates them too permissive)
 info "Fixing SSH key permissions..."
 chmod 700 "$HOME/.ssh"
