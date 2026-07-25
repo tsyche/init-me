@@ -231,6 +231,12 @@ fi
 rm -f /tmp/gh-auth-status.err
 
 if ! gh auth status &>/dev/null; then
+  # Both paths below generate a time-limited code/session the instant they
+  # run — gh gives up with "context deadline exceeded" if nobody completes
+  # it in time. Pause here so THAT clock only starts once you're actually
+  # about to sit and finish it, instead of ticking away while the earlier
+  # apt/Homebrew steps run or if you step away right as this section starts.
+  read -r -p "About to authenticate with GitHub — this starts a time-limited code, so make sure you're ready to complete it right away. Press Enter when ready... "
   info "Authenticating with GitHub..."
   # admin:public_key is needed below for `gh ssh-key add` — the device-flow
   # login (headless Linux path) doesn't grant it by default, and without it
@@ -259,6 +265,10 @@ if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
     # a full re-auth, then retry the same upload once.
     if grep -q "admin:public_key" /tmp/gh-ssh-key-add.err; then
       info "Existing GitHub token lacks admin:public_key — refreshing scope..."
+      # Same time-limited-code risk as the initial login above — this can
+      # fire unexpectedly (only triggers if the earlier token was already
+      # stale), so it's easy to not be watching when it happens.
+      read -r -p "This refresh also needs a fresh device code — press Enter when ready to complete it right away... "
       gh auth refresh -h github.com -s admin:public_key
       gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$key_title"
     else
