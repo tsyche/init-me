@@ -9,6 +9,27 @@
 # Windows: run inside WSL or Git Bash first (native Windows support is a future add)
 set -euo pipefail
 
+## MACHINE TYPE ##
+
+# Determines the credential mechanism used below (SSH keys tied to your own
+# GitHub identities vs. a short-lived PAT over HTTPS) — asked first, before
+# anything else happens, since it changes what the rest of this script even
+# does. Exported so setup-all.sh/bootstrap.sh inherit the answer instead of
+# asking again (same pattern as BOOTSTRAP_LOG_ACTIVE below) — each still
+# asks for itself if run standalone, when this isn't already set.
+if [[ -z "${MACHINE_TYPE:-}" ]]; then
+  echo "What kind of machine is this?"
+  echo "  1) Personal (your own hardware)"
+  echo "  2) Employer-owned (not your own hardware)"
+  read -r -p "Select 1 or 2: " _machine_choice
+  if [[ "$_machine_choice" == "2" ]]; then
+    export MACHINE_TYPE="employer"
+  else
+    export MACHINE_TYPE="personal"
+  fi
+fi
+echo "[init-me] Machine type: $MACHINE_TYPE"
+
 # Capture this run to a timestamped log, always — no more manually
 # remembering `| tee` after losing scrollback mid-debug. Guarded by
 # BOOTSTRAP_LOG_ACTIVE so that when this script hands off to setup-all.sh
@@ -40,6 +61,19 @@ CLAUDERC_DEST="$HOME/.claude"
 
 info()  { echo "[init-me] $*"; }
 die()   { echo "[init-me] ERROR: $*" >&2; exit 1; }
+
+# Builds the clone URL for $1 (repo name) — SSH for personal machines
+# (existing behavior, tied to your own GitHub identity), HTTPS with the
+# username embedded for employer-owned ones so git only prompts for the PAT
+# itself, not username too. The credential.helper cache set up below keeps
+# that PAT in memory only for the rest of this run — never written to disk.
+_clone_url() {
+  if [[ "$MACHINE_TYPE" == "employer" ]]; then
+    echo "https://$GITHUB_USER@github.com/$GITHUB_USER/$1.git"
+  else
+    echo "git@github.com:$GITHUB_USER/$1.git"
+  fi
+}
 
 # Clone/sync $1 (repo name) into $2 (dest) without ever destroying content
 # that's already there — same "back it up, never delete" spirit as
@@ -74,10 +108,10 @@ sync_repo() {
   info "Cloning $repo → $dest..."
   # Plain git clone, not `gh repo clone` — the latter does a GraphQL lookup
   # to resolve the repo before cloning, an extra GitHub API dependency this
-  # doesn't need since the SSH URL is already known. Found live: repeated
-  # heavy gh usage exhausted a GraphQL rate limit and blocked cloning even
-  # though a working SSH key already existed.
-  git clone "git@github.com:$GITHUB_USER/$repo.git" "$dest"
+  # doesn't need since the URL is already known. Found live: repeated heavy
+  # gh usage exhausted a GraphQL rate limit and blocked cloning even though
+  # a working SSH key already existed.
+  git clone "$(_clone_url "$repo")" "$dest"
 }
 
 _adopt_existing_dir() {
@@ -85,7 +119,7 @@ _adopt_existing_dir() {
   local tmp
   tmp="$(mktemp -d)"
   info "$dest already has content but isn't a git checkout — adopting $repo without overwriting anything..."
-  git clone --quiet "git@github.com:$GITHUB_USER/$repo.git" "$tmp"
+  git clone --quiet "$(_clone_url "$repo")" "$tmp"
 
   local backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
   local staged=0
@@ -196,6 +230,10 @@ if ! command -v brew &>/dev/null; then
 else
   info "Homebrew already installed, skipping."
 fi
+
+## GH CLI / SSH KEYS (personal machines) — PAT over HTTPS (employer-owned) ##
+
+if [[ "$MACHINE_TYPE" == "personal" ]]; then
 
 ## GH CLI ##
 
@@ -315,6 +353,19 @@ fi
 info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
 # Only add ed25519 key at this stage (symlinks for id_personal/id_work don't exist yet)
 ssh-add "$HOME/.ssh/id_ed25519" || true
+
+else
+  # Employer-owned: no gh CLI, no SSH keys tied to your own GitHub
+  # identities — none of that belongs on hardware you don't own. Cloning
+  # below goes over HTTPS instead, authenticated with a Personal Access
+  # Token you create yourself (read-only, scoped to just these repos). git's
+  # own credential prompt handles entering it — `cache` here means it's held
+  # in memory only for this run and auto-expires; never written to disk, and
+  # never handled by this script directly.
+  info "Employer machine — using a GitHub Personal Access Token over HTTPS instead of gh CLI/SSH keys."
+  info "You'll be prompted for it once (as the password); it's cached in memory for this run only."
+  git config --global credential.helper 'cache --timeout=14400'
+fi
 
 ## FIX SSH CONFIG ##
 

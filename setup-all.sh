@@ -29,7 +29,38 @@ info()  { echo "[setup-all] $*"; }
 warn()  { echo "[setup-all] WARNING: $*" >&2; }
 die()   { echo "[setup-all] ERROR: $*" >&2; exit 1; }
 
+## MACHINE TYPE ##
+
+# Inherited from init.sh's handoff when run that way; asks for itself when
+# run standalone. See init.sh for the full rationale.
+if [[ -z "${MACHINE_TYPE:-}" ]]; then
+  echo "What kind of machine is this?"
+  echo "  1) Personal (your own hardware)"
+  echo "  2) Employer-owned (not your own hardware)"
+  read -r -p "Select 1 or 2: " _machine_choice
+  if [[ "$_machine_choice" == "2" ]]; then
+    export MACHINE_TYPE="employer"
+  else
+    export MACHINE_TYPE="personal"
+  fi
+fi
+if [[ "$MACHINE_TYPE" == "employer" ]]; then
+  info "Employer machine — cloning over HTTPS with a PAT (cached in memory only, never on disk) instead of SSH keys."
+  git config --global credential.helper 'cache --timeout=14400'
+fi
+
 ## HELPERS ##
+
+# Builds the clone URL for $1 (repo name) — SSH for personal machines, HTTPS
+# with the username embedded for employer-owned ones. See init.sh's
+# _clone_url for the full rationale.
+_clone_url() {
+  if [[ "$MACHINE_TYPE" == "employer" ]]; then
+    echo "https://$GITHUB_USER@github.com/$GITHUB_USER/$1.git"
+  else
+    echo "git@github.com:$GITHUB_USER/$1.git"
+  fi
+}
 
 # Same safe-sync behavior as init.sh's sync_repo() — never overwrite content
 # that's already at $dest. See init.sh for the full rationale.
@@ -55,7 +86,7 @@ sync_repo() {
   # Plain git clone, not `gh repo clone` — see init.sh's sync_repo for why
   # (avoids an unnecessary GraphQL API dependency for a step that doesn't
   # need it).
-  git clone "git@github.com:$GITHUB_USER/$repo.git" "$dest" || die "Failed to clone $repo"
+  git clone "$(_clone_url "$repo")" "$dest" || die "Failed to clone $repo"
 }
 
 _adopt_existing_dir() {
@@ -63,7 +94,7 @@ _adopt_existing_dir() {
   local tmp
   tmp="$(mktemp -d)"
   info "$dest already has content but isn't a git checkout — adopting $repo without overwriting anything..."
-  git clone --quiet "git@github.com:$GITHUB_USER/$repo.git" "$tmp" || { warn "Failed to clone $repo for adoption"; rm -rf "$tmp"; return; }
+  git clone --quiet "$(_clone_url "$repo")" "$tmp" || { warn "Failed to clone $repo for adoption"; rm -rf "$tmp"; return; }
 
   local backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
   local staged=0
