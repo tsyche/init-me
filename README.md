@@ -5,12 +5,19 @@ One command to bootstrap a new machine. Installs Homebrew, authenticates GitHub,
 ## Usage
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/tsyche/init-me/main/init.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/tsyche/init-me/main/init.sh || curl -fsSL https://gitlab.com/tsyche/init-me/-/raw/main/init.sh)
 ```
 
-You'll be prompted twice:
-1. Homebrew install (sudo password, macOS only first time)
-2. `gh auth login` (opens browser — log in and approve)
+Tries GitHub first, falls back to the GitLab mirror if that fetch fails —
+same script either way, kept in sync manually for now.
+
+You'll be prompted for:
+1. What kind of machine this is (personal vs. employer-owned — changes the
+   credential mechanism used below, see `init.sh` for details)
+2. Homebrew install (sudo password, macOS only first time)
+3. Personal machines: `gh auth login` (opens browser — log in and approve).
+   Employer-owned machines: a GitHub Personal Access Token instead (no gh
+   CLI, no SSH keys tied to your own GitHub identities)
 
 Everything else is automated.
 

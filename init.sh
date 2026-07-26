@@ -2,8 +2,8 @@
 # New machine bootstrap — installs Homebrew, authenticates GitHub, clones all
 # config repos, then hands off to dotfile-matrix/bootstrap.sh for full setup.
 #
-# Usage:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/tsyche/init-me/main/init.sh)
+# Usage (GitHub first, falls back to the GitLab mirror if that fetch fails):
+#   bash <(curl -fsSL https://raw.githubusercontent.com/tsyche/init-me/main/init.sh || curl -fsSL https://gitlab.com/tsyche/init-me/-/raw/main/init.sh)
 #
 # Supports: macOS, Linux
 # Windows: run inside WSL or Git Bash first (native Windows support is a future add)
