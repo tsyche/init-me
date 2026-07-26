@@ -37,25 +37,29 @@ if [[ -z "${MACHINE_TYPE:-}" ]]; then
   echo "What kind of machine is this?"
   echo "  1) Personal (your own hardware)"
   echo "  2) Employer-owned (not your own hardware)"
-  read -r -p "Select 1 or 2: " _machine_choice
-  if [[ "$_machine_choice" == "2" ]]; then
-    export MACHINE_TYPE="employer"
-  else
-    export MACHINE_TYPE="personal"
-  fi
+  echo "  3) Family/other person's machine (not your daily use — setting it up for someone else)"
+  read -r -p "Select 1, 2, or 3: " _machine_choice
+  case "$_machine_choice" in
+    2) export MACHINE_TYPE="employer" ;;
+    3) export MACHINE_TYPE="family" ;;
+    *) export MACHINE_TYPE="personal" ;;
+  esac
 fi
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
   info "Employer machine — cloning over HTTPS with a PAT (cached in memory only, never on disk) instead of SSH keys."
+  git config --global credential.helper 'cache --timeout=14400'
+elif [[ "$MACHINE_TYPE" == "family" ]]; then
+  info "Family/other-person machine — cloning over HTTPS with a PAT (cached in memory only, never on disk)."
   git config --global credential.helper 'cache --timeout=14400'
 fi
 
 ## HELPERS ##
 
 # Builds the clone URL for $1 (repo name) — SSH for personal machines, HTTPS
-# with the username embedded for employer-owned ones. See init.sh's
-# _clone_url for the full rationale.
+# with the username embedded for employer-owned and family/other-person
+# ones. See init.sh's _clone_url for the full rationale.
 _clone_url() {
-  if [[ "$MACHINE_TYPE" == "employer" ]]; then
+  if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
     echo "https://$GITHUB_USER@github.com/$GITHUB_USER/$1.git"
   else
     echo "git@github.com:$GITHUB_USER/$1.git"
@@ -158,17 +162,35 @@ sync_repo "dotfile-matrix" "$REPOS_DIR/dotfile-matrix"
 # Clone/pull clauderc — skipped on employer machines, since Claude Code
 # itself (claude-code@latest) is already in bootstrap.sh's EMPLOYER_EXCLUDES
 # and never gets installed there; nothing to serve its config repo either.
+# Family/other-person machines get the same "light" skills/scripts-only
+# treatment as init.sh — see there for the full rationale.
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
   info "Employer machine — skipping clauderc (Claude Code isn't installed there either)."
+elif [[ "$MACHINE_TYPE" == "family" ]]; then
+  read -r -p "Install the custom Claude skills/scripts on this machine? [y/N] " _want_clauderc_light
+  if [[ "$_want_clauderc_light" =~ ^[Yy]$ ]]; then
+    info "Installing skills/scripts only (not a full clauderc clone)..."
+    _tmp_clauderc="$(mktemp -d)"
+    git clone --quiet --depth=1 "$(_clone_url "clauderc")" "$_tmp_clauderc"
+    mkdir -p "$CLAUDERC_DEST"
+    cp -a "$_tmp_clauderc/skills" "$CLAUDERC_DEST/" 2>/dev/null || true
+    cp -a "$_tmp_clauderc/scripts" "$CLAUDERC_DEST/" 2>/dev/null || true
+    rm -rf "$_tmp_clauderc"
+    info "skills/scripts installed to $CLAUDERC_DEST."
+  fi
 else
   sync_repo "clauderc" "$CLAUDERC_DEST"
 fi
 
-# Clone/pull configgy-smalls
-sync_repo "configgy-smalls" "$REPOS_DIR/configgy-smalls"
-
-# Clone/pull scriptorium
-sync_repo "scriptorium" "$REPOS_DIR/scriptorium"
+# Clone/pull configgy-smalls and scriptorium — skipped entirely on
+# family/other-person machines, same reasoning as init.sh: these are
+# exactly the "specific to you" content that machine type shouldn't carry.
+if [[ "$MACHINE_TYPE" == "family" ]]; then
+  info "Family/other-person machine — skipping configgy-smalls and scriptorium (not applicable here)."
+else
+  sync_repo "configgy-smalls" "$REPOS_DIR/configgy-smalls"
+  sync_repo "scriptorium" "$REPOS_DIR/scriptorium"
+fi
 
 ## RUN SETUP FOR EACH REPO ##
 
@@ -178,16 +200,25 @@ info "Running setup for each repo..."
 info "Step 1: dotfile-matrix bootstrap..."
 "$REPOS_DIR/dotfile-matrix/bootstrap.sh" || warn "dotfile-matrix bootstrap had issues"
 
-# configgy-smalls: sync if it has a sync script
-if [[ -f "$REPOS_DIR/configgy-smalls/sync.sh" ]]; then
+# configgy-smalls: sync if it has a sync script — never cloned at all on
+# family/other-person machines, so this check naturally no-ops there too,
+# but an explicit message is clearer than the generic "no sync.sh" one.
+if [[ "$MACHINE_TYPE" == "family" ]]; then
+  info "Step 2: configgy-smalls (skipped, family/other-person machine)"
+elif [[ -f "$REPOS_DIR/configgy-smalls/sync.sh" ]]; then
   info "Step 2: configgy-smalls sync..."
   "$REPOS_DIR/configgy-smalls/sync.sh" apply || warn "configgy-smalls sync had issues"
 else
   info "Step 2: configgy-smalls (no sync.sh, skipping)"
 fi
 
-# scriptorium: symlink ~/Scripts if not already done
-if [[ -L "$HOME/Scripts" ]]; then
+# scriptorium: symlink ~/Scripts if not already done. Explicitly skipped on
+# family/other-person machines — without this check the `ln -s` below would
+# happily create a dangling symlink pointing at a scriptorium checkout that
+# deliberately doesn't exist there (found while auditing this machine type).
+if [[ "$MACHINE_TYPE" == "family" ]]; then
+  info "Step 3: ~/Scripts symlink (skipped, family/other-person machine)"
+elif [[ -L "$HOME/Scripts" ]]; then
   info "Step 3: ~/Scripts already symlinked, skipping"
 elif [[ -e "$HOME/Scripts" ]]; then
   warn "~/Scripts exists but is not a symlink — skipping to avoid overwriting"
@@ -199,6 +230,8 @@ fi
 # clauderc: no setup needed (it's just configs, auto-loaded from ~/.claude)
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
   info "Step 4: clauderc (skipped, employer machine)"
+elif [[ "$MACHINE_TYPE" == "family" ]]; then
+  info "Step 4: clauderc (light install only if you opted in above, no further setup needed)"
 else
   info "Step 4: clauderc (no setup needed, already in place)"
 fi

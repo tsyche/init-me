@@ -21,12 +21,13 @@ if [[ -z "${MACHINE_TYPE:-}" ]]; then
   echo "What kind of machine is this?"
   echo "  1) Personal (your own hardware)"
   echo "  2) Employer-owned (not your own hardware)"
-  read -r -p "Select 1 or 2: " _machine_choice
-  if [[ "$_machine_choice" == "2" ]]; then
-    export MACHINE_TYPE="employer"
-  else
-    export MACHINE_TYPE="personal"
-  fi
+  echo "  3) Family/other person's machine (not your daily use — setting it up for someone else)"
+  read -r -p "Select 1, 2, or 3: " _machine_choice
+  case "$_machine_choice" in
+    2) export MACHINE_TYPE="employer" ;;
+    3) export MACHINE_TYPE="family" ;;
+    *) export MACHINE_TYPE="personal" ;;
+  esac
 fi
 echo "[init-me] Machine type: $MACHINE_TYPE"
 
@@ -64,11 +65,15 @@ die()   { echo "[init-me] ERROR: $*" >&2; exit 1; }
 
 # Builds the clone URL for $1 (repo name) — SSH for personal machines
 # (existing behavior, tied to your own GitHub identity), HTTPS with the
-# username embedded for employer-owned ones so git only prompts for the PAT
-# itself, not username too. The credential.helper cache set up below keeps
-# that PAT in memory only for the rest of this run — never written to disk.
+# username embedded for employer-owned AND family/other-person machines, so
+# git only prompts for the PAT itself, not username too. The
+# credential.helper cache set up below keeps that PAT in memory only for the
+# rest of this run — never written to disk. Family machines use this same
+# mechanism for the initial clone regardless of whether they later opt into
+# gh/glab CLI for the actual user's own accounts (that's a separate,
+# additional step below, not how dotfile-matrix itself gets here).
 _clone_url() {
-  if [[ "$MACHINE_TYPE" == "employer" ]]; then
+  if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
     echo "https://$GITHUB_USER@github.com/$GITHUB_USER/$1.git"
   else
     echo "git@github.com:$GITHUB_USER/$1.git"
@@ -405,7 +410,7 @@ info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
 # Only this bootstrap-time key at this stage (id_personal/id_work don't exist yet)
 ssh-add "$BOOTSTRAP_SSH_KEY" || true
 
-else
+elif [[ "$MACHINE_TYPE" == "employer" ]]; then
   # Employer-owned: no gh CLI, no SSH keys tied to your own GitHub
   # identities — none of that belongs on hardware you don't own. Cloning
   # below goes over HTTPS instead, authenticated with a Personal Access
@@ -422,6 +427,42 @@ else
   # (found live: a username/PAT typo here just looks like a plain auth
   # failure, easy to misdiagnose as something being broken).
   read -r -p "About to clone using your GitHub username + Personal Access Token (as the password) — have both ready. Press Enter when ready... "
+else
+  # Family/other person's machine: the initial clone below uses the same
+  # PAT-over-HTTPS mechanism as employer machines (you're the one running
+  # this, using your own PAT) — completely separate from whether the person
+  # actually using this machine wants gh/glab CLI set up for THEIR OWN
+  # accounts, which is what's actually asked here. Declining either prompt
+  # below only skips installing/logging into that CLI — it does NOT skip
+  # dotfile-matrix's own id_local key generation later, which happens
+  # unconditionally and is saved to disk regardless of what's answered here,
+  # ready to be added to any account by hand whenever it's wanted.
+  info "Family/other-person machine — cloning with your own PAT over HTTPS (same as employer machines)."
+  git config --global credential.helper 'cache --timeout=14400'
+  read -r -p "About to clone using your GitHub username + Personal Access Token (as the password) — have both ready. Press Enter when ready... "
+
+  read -r -p "Set up gh (GitHub CLI) on this machine, for its own GitHub account? [y/N] " _want_gh
+  if [[ "$_want_gh" =~ ^[Yy]$ ]]; then
+    if ! command -v gh &>/dev/null; then
+      info "Installing gh CLI..."
+      brew install gh
+    fi
+    # --web here, not the headless device-flow fallback personal machines
+    # need — this is someone sitting at the machine, and gh's own prompts
+    # (including an optional SSH key setup) work fine interactively. Not
+    # duplicating personal's manual key-generation safety net since nothing
+    # here depends on it succeeding the way the initial clone did.
+    gh auth login --git-protocol ssh --web || info "gh auth login didn't complete — this machine's owner can retry it later with: gh auth login"
+  fi
+
+  read -r -p "Set up glab (GitLab CLI) on this machine, for its own GitLab account? [y/N] " _want_glab
+  if [[ "$_want_glab" =~ ^[Yy]$ ]]; then
+    if ! command -v glab &>/dev/null; then
+      info "Installing glab CLI..."
+      brew install glab
+    fi
+    glab auth login --web --git-protocol ssh || info "glab auth login didn't complete — this machine's owner can retry it later with: glab auth login"
+  fi
 fi
 
 ## FIX SSH CONFIG ##
@@ -452,9 +493,39 @@ for repo in "${PRIVATE_REPOS[@]}"; do
     if [[ "$MACHINE_TYPE" == "employer" ]]; then
       info "Employer machine — skipping clauderc (Claude Code isn't installed there either)."
       continue
+    elif [[ "$MACHINE_TYPE" == "family" ]]; then
+      # "Light" install, not a full clauderc clone — copies just skills/ and
+      # scripts/ out of a throwaway temp clone, then discards the temp
+      # clone's git history entirely. ~/.claude on this machine is NOT a git
+      # checkout of clauderc: no per-project memory, no plans, nothing of
+      # yours ends up here, and nothing this machine's owner does in Claude
+      # Code can accidentally get pushed back to your repo. Updating later
+      # means re-running the copy, not `git pull` — see scriptorium's
+      # refresh script.
+      read -r -p "Install the custom Claude skills/scripts on this machine? [y/N] " _want_clauderc_light
+      if [[ "$_want_clauderc_light" =~ ^[Yy]$ ]]; then
+        info "Installing skills/scripts only (not a full clauderc clone)..."
+        _tmp_clauderc="$(mktemp -d)"
+        git clone --quiet --depth=1 "$(_clone_url "$repo")" "$_tmp_clauderc"
+        mkdir -p "$CLAUDERC_DEST"
+        cp -a "$_tmp_clauderc/skills" "$CLAUDERC_DEST/" 2>/dev/null || true
+        cp -a "$_tmp_clauderc/scripts" "$CLAUDERC_DEST/" 2>/dev/null || true
+        rm -rf "$_tmp_clauderc"
+        info "skills/scripts installed to $CLAUDERC_DEST."
+      fi
+      continue
     fi
     dest="$CLAUDERC_DEST"
   else
+    # configgy-smalls (your GUI app prefs) and scriptorium (your personal
+    # scripts) are exactly the "specific to you" content a family/other-
+    # person machine shouldn't carry — dotfile-matrix (the actual tools) is
+    # the only private repo this machine type gets, plus optionally
+    # clauderc-light above.
+    if [[ "$MACHINE_TYPE" == "family" ]] && { [[ "$repo" == "configgy-smalls" ]] || [[ "$repo" == "scriptorium" ]]; }; then
+      info "Family/other-person machine — skipping $repo (not applicable here)."
+      continue
+    fi
     dest="$REPOS_DIR/$repo"
   fi
 
