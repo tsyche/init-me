@@ -365,6 +365,12 @@ else
   info "Employer machine — using a GitHub Personal Access Token over HTTPS instead of gh CLI/SSH keys."
   info "You'll be prompted for it once (as the password); it's cached in memory for this run only."
   git config --global credential.helper 'cache --timeout=14400'
+  # Same reasoning as the gh device-code pause above — the clone right after
+  # this triggers the actual username/password prompt, so make sure the PAT
+  # is in hand *before* that happens rather than fumbling for it mid-prompt
+  # (found live: a username/PAT typo here just looks like a plain auth
+  # failure, easy to misdiagnose as something being broken).
+  read -r -p "About to clone using your GitHub username + Personal Access Token (as the password) — have both ready. Press Enter when ready... "
 fi
 
 ## FIX SSH CONFIG ##
