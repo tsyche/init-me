@@ -155,8 +155,14 @@ mkdir -p "$REPOS_DIR"
 # Clone/pull dotfile-matrix
 sync_repo "dotfile-matrix" "$REPOS_DIR/dotfile-matrix"
 
-# Clone/pull clauderc
-sync_repo "clauderc" "$CLAUDERC_DEST"
+# Clone/pull clauderc — skipped on employer machines, since Claude Code
+# itself (claude-code@latest) is already in bootstrap.sh's EMPLOYER_EXCLUDES
+# and never gets installed there; nothing to serve its config repo either.
+if [[ "$MACHINE_TYPE" == "employer" ]]; then
+  info "Employer machine — skipping clauderc (Claude Code isn't installed there either)."
+else
+  sync_repo "clauderc" "$CLAUDERC_DEST"
+fi
 
 # Clone/pull configgy-smalls
 sync_repo "configgy-smalls" "$REPOS_DIR/configgy-smalls"
@@ -191,7 +197,11 @@ else
 fi
 
 # clauderc: no setup needed (it's just configs, auto-loaded from ~/.claude)
-info "Step 4: clauderc (no setup needed, already in place)"
+if [[ "$MACHINE_TYPE" == "employer" ]]; then
+  info "Step 4: clauderc (skipped, employer machine)"
+else
+  info "Step 4: clauderc (no setup needed, already in place)"
+fi
 
 ## DONE ##
 

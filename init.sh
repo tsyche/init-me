@@ -394,6 +394,14 @@ mkdir -p "$REPOS_DIR"
 
 for repo in "${PRIVATE_REPOS[@]}"; do
   if [[ "$repo" == "clauderc" ]]; then
+    # Claude Code itself (claude-code@latest) is already in bootstrap.sh's
+    # EMPLOYER_EXCLUDES, so it's never installed on an employer machine —
+    # cloning its config repo there would have nothing to serve. Keeps PAT
+    # scoping simpler too: one less repo to grant it access to.
+    if [[ "$MACHINE_TYPE" == "employer" ]]; then
+      info "Employer machine — skipping clauderc (Claude Code isn't installed there either)."
+      continue
+    fi
     dest="$CLAUDERC_DEST"
   else
     dest="$REPOS_DIR/$repo"
