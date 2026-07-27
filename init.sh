@@ -208,28 +208,50 @@ fi
 
 ## HOMEBREW ##
 
-if ! command -v brew &>/dev/null; then
+# Check the known install path directly, not `command -v brew` — that
+# depends on $PATH already including Homebrew's bin dir, which a brand-new
+# `bash <(curl ...)` process won't have unless the *parent* shell session
+# happened to start after Homebrew's PATH lines were already added. Found
+# live: re-running this on a machine with Homebrew genuinely already
+# installed, from a shell session that predated it, triggered a full
+# (wasteful, alarming-looking) reinstall every time.
+if [[ "$OS" == "mac" ]]; then
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    BREW_BIN=/opt/homebrew/bin/brew
+  elif [[ -x /usr/local/bin/brew ]]; then
+    BREW_BIN=/usr/local/bin/brew
+  else
+    BREW_BIN=""
+  fi
+  SHELLENV_RC="$HOME/.zprofile"
+else
+  BREW_BIN=/home/linuxbrew/.linuxbrew/bin/brew
+  [[ -x "$BREW_BIN" ]] || BREW_BIN=""
+  SHELLENV_RC="$HOME/.bashrc"
+fi
+
+if [[ -z "$BREW_BIN" ]]; then
   info "Installing Homebrew..."
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   if [[ "$OS" == "mac" ]]; then
     [[ -x /opt/homebrew/bin/brew ]] && BREW_BIN=/opt/homebrew/bin/brew || BREW_BIN=/usr/local/bin/brew
-    SHELLENV_RC="$HOME/.zprofile"
   else
     BREW_BIN=/home/linuxbrew/.linuxbrew/bin/brew
-    SHELLENV_RC="$HOME/.bashrc"
   fi
-  # Add brew to PATH for the rest of this script...
-  eval "$("$BREW_BIN" shellenv)"
-  # ...and persist it for real, not just this process. Without this, any NEW
-  # shell opened before the tracked zshrc gets symlinked (much later in this
-  # pipeline) has no idea brew/gh exist — found live when a step failed
-  # mid-bootstrap and a fresh SSH session couldn't find `gh`, despite it
-  # being fully installed on disk.
-  SHELLENV_LINE="eval \"\$($BREW_BIN shellenv)\""
-  grep -qF "$SHELLENV_LINE" "$SHELLENV_RC" 2>/dev/null || echo "$SHELLENV_LINE" >> "$SHELLENV_RC"
 else
   info "Homebrew already installed, skipping."
 fi
+
+# Always runs, install or not — command -v brew (see above) isn't reliable
+# for detecting this process's own $PATH state, so always fixing it here is
+# the only way to guarantee later steps (gh, etc.) can actually find brew
+# tools within this same run, regardless of which branch just fired.
+eval "$("$BREW_BIN" shellenv)"
+# Persisted for real too, not just this process — any NEW shell opened
+# before the tracked zshrc gets symlinked (much later in this pipeline) has
+# no idea brew/gh exist otherwise.
+SHELLENV_LINE="eval \"\$($BREW_BIN shellenv)\""
+grep -qF "$SHELLENV_LINE" "$SHELLENV_RC" 2>/dev/null || echo "$SHELLENV_LINE" >> "$SHELLENV_RC"
 
 ## GH CLI / SSH KEYS (personal machines) — PAT over HTTPS (employer-owned) ##
 
@@ -302,8 +324,22 @@ mkdir -p "$HOME/.ssh"
 # filename — a plain filename match would break on any re-run after today,
 # since tomorrow's exact name wouldn't match yesterday's dated file, and
 # this script would think no key exists yet and generate a second one.
+#
+# Pure-bash glob (nullglob), not `ls | grep | head` — found live: when the
+# glob matches nothing (the normal case, no dated key yet), `ls` fails and
+# `grep -v` on the resulting empty input ALSO returns non-zero ("no lines
+# selected"); pipefail then propagates that through the whole assignment,
+# and set -e kills the entire script right there with zero error output.
 _bootstrap_key_host="$(hostname -s 2>/dev/null || hostname)"
-_existing_bootstrap_key="$(command ls "$HOME/.ssh/id_${_bootstrap_key_host}_"[0-9]* 2>/dev/null | command grep -v '\.pub$' | command head -1)"
+shopt -s nullglob
+_bootstrap_key_candidates=("$HOME/.ssh/id_${_bootstrap_key_host}_"[0-9]*)
+shopt -u nullglob
+_existing_bootstrap_key=""
+for _candidate in "${_bootstrap_key_candidates[@]}"; do
+  [[ "$_candidate" == *.pub ]] && continue
+  _existing_bootstrap_key="$_candidate"
+  break
+done
 if [[ -n "$_existing_bootstrap_key" ]]; then
   BOOTSTRAP_SSH_KEY="$_existing_bootstrap_key"
 else
