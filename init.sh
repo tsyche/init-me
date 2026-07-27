@@ -293,11 +293,26 @@ fi
 # auth (found live: auth succeeded but no key existed afterward) — don't
 # assume gh generated one, generate + register it ourselves if it didn't.
 mkdir -p "$HOME/.ssh"
-if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+# Named id_<hostname>_<date> instead of the generic OpenSSH default
+# id_ed25519, both locally and as the title GitHub shows for it — same
+# spirit as dotfile-matrix's id_personal/id_work, so this key is
+# identifiable at a glance in `~/.ssh/` or GitHub's SSH keys list instead of
+# being one of several machines' identically-named "id_ed25519 (2026-07-26)"
+# entries. Existence check is a GLOB on id_<hostname>_*, not the exact
+# filename — a plain filename match would break on any re-run after today,
+# since tomorrow's exact name wouldn't match yesterday's dated file, and
+# this script would think no key exists yet and generate a second one.
+_bootstrap_key_host="$(hostname -s 2>/dev/null || hostname)"
+_existing_bootstrap_key="$(command ls "$HOME/.ssh/id_${_bootstrap_key_host}_"[0-9]* 2>/dev/null | command grep -v '\.pub$' | command head -1)"
+if [[ -n "$_existing_bootstrap_key" ]]; then
+  BOOTSTRAP_SSH_KEY="$_existing_bootstrap_key"
+else
   info "No SSH key present after GitHub auth — generating one (passphrase optional, prompted below)..."
-  ssh-keygen -t ed25519 -f "$HOME/.ssh/id_ed25519" -C "$(whoami)@$(hostname -s 2>/dev/null || hostname)"
-  key_title="$(hostname -s 2>/dev/null || hostname) ($(date +%Y-%m-%d))"
-  if ! gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$key_title" 2>/tmp/gh-ssh-key-add.err; then
+  key_name="id_${_bootstrap_key_host}_$(date +%Y%m%d)"
+  BOOTSTRAP_SSH_KEY="$HOME/.ssh/$key_name"
+  ssh-keygen -t ed25519 -f "$BOOTSTRAP_SSH_KEY" -C "$(whoami)@${_bootstrap_key_host}"
+  key_title="$key_name"
+  if ! gh ssh-key add "$BOOTSTRAP_SSH_KEY.pub" --title "$key_title" 2>/tmp/gh-ssh-key-add.err; then
     # A token from a prior run (before this scope was requested at login)
     # won't have admin:public_key — refresh it in place rather than require
     # a full re-auth, then retry the same upload once.
@@ -308,7 +323,7 @@ if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
       # stale), so it's easy to not be watching when it happens.
       read -r -p "This refresh also needs a fresh device code — press Enter when ready to complete it right away... "
       gh auth refresh -h github.com -s admin:public_key
-      gh ssh-key add "$HOME/.ssh/id_ed25519.pub" --title "$key_title"
+      gh ssh-key add "$BOOTSTRAP_SSH_KEY.pub" --title "$key_title"
     else
       cat /tmp/gh-ssh-key-add.err >&2
       exit 1
@@ -326,8 +341,8 @@ grep -q "^github.com " "$HOME/.ssh/known_hosts" 2>/dev/null || ssh-keyscan -t ed
 # Ensure SSH key permissions are correct (gh creates them too permissive)
 info "Fixing SSH key permissions..."
 chmod 700 "$HOME/.ssh"
-chmod 600 "$HOME/.ssh/id_ed25519" 2>/dev/null || true
-chmod 644 "$HOME/.ssh/id_ed25519.pub" 2>/dev/null || true
+chmod 600 "$BOOTSTRAP_SSH_KEY" 2>/dev/null || true
+chmod 644 "$BOOTSTRAP_SSH_KEY.pub" 2>/dev/null || true
 
 ## ADD SSH KEY TO AGENT ##
 
@@ -351,8 +366,8 @@ if [[ "$agent_status" -eq 2 ]]; then
 fi
 
 info "Adding SSH key to agent (you'll be prompted for passphrase once)..."
-# Only add ed25519 key at this stage (symlinks for id_personal/id_work don't exist yet)
-ssh-add "$HOME/.ssh/id_ed25519" || true
+# Only this bootstrap-time key at this stage (id_personal/id_work don't exist yet)
+ssh-add "$BOOTSTRAP_SSH_KEY" || true
 
 else
   # Employer-owned: no gh CLI, no SSH keys tied to your own GitHub
