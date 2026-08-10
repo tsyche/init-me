@@ -68,6 +68,37 @@ fi
 
 ## HELPERS ##
 
+# Runs a sub-script and reports what actually happened to it. Replaces the
+# old `script.sh || warn "X had issues"` pattern, which printed the identical
+# message whether the script failed at runtime, wasn't executable, or did not
+# exist at all. That ambiguity cost a long debugging session on 2026-08-10:
+# a missing bootstrap.sh (exit 127, never ran) was reported as "bootstrap had
+# issues", which reads as "it ran and something went wrong" and sent the
+# investigation entirely the wrong way. Existence and executability are now
+# checked up front, and the real exit code is always reported.
+run_step() {
+  local label="$1" path="$2"
+  shift 2
+
+  if [[ ! -e "$path" ]]; then
+    warn "$label — DID NOT RUN: $path does not exist"
+    return
+  fi
+  if [[ ! -x "$path" ]]; then
+    warn "$label — DID NOT RUN: $path exists but is not executable (chmod +x)"
+    return
+  fi
+
+  local rc=0
+  "$path" "$@" || rc=$?
+  case "$rc" in
+    0)   ;;
+    126) warn "$label — FAILED (rc=126): found but could not be executed" ;;
+    127) warn "$label — FAILED (rc=127): a command inside it was not found" ;;
+    *)   warn "$label — FAILED (rc=$rc). Where it stopped: tail -5 ~/bootstrap-steps.log; why: cat ~/bootstrap-error.log" ;;
+  esac
+}
+
 # Builds the clone URL for $1 (repo name) — SSH for personal machines, HTTPS
 # with the username embedded for employer-owned and family/other-person
 # ones. See init.sh's _clone_url for the full rationale.
@@ -233,7 +264,7 @@ info "Running setup for each repo..."
 
 # dotfile-matrix: full bootstrap
 info "Step 1: dotfile-matrix bootstrap..."
-"$REPOS_DIR/dotfile-matrix/bootstrap.sh" || warn "dotfile-matrix bootstrap had issues"
+run_step "dotfile-matrix bootstrap" "$REPOS_DIR/dotfile-matrix/bootstrap.sh"
 
 # configgy-smalls: sync if it has a sync script — never cloned at all on
 # family/other-person machines, so this check naturally no-ops there too,
@@ -242,7 +273,7 @@ if [[ "$MACHINE_TYPE" == "family" ]]; then
   info "Step 2: configgy-smalls (skipped, family/other-person machine)"
 elif [[ -f "$REPOS_DIR/configgy-smalls/sync.sh" ]]; then
   info "Step 2: configgy-smalls sync..."
-  "$REPOS_DIR/configgy-smalls/sync.sh" apply || warn "configgy-smalls sync had issues"
+  run_step "configgy-smalls sync" "$REPOS_DIR/configgy-smalls/sync.sh" apply
 else
   info "Step 2: configgy-smalls (no sync.sh, skipping)"
 fi
