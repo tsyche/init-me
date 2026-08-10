@@ -56,10 +56,14 @@ if [[ -z "${MACHINE_TYPE:-}" ]]; then
 fi
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
   info "Employer machine — cloning over HTTPS with a PAT instead of SSH keys. The PAT itself never touches disk, but note the cache below is a background daemon with a 4-hour timeout, not scoped to this script run — it's purged explicitly once the last clone/pull below finishes, not left to expire on its own."
-  git config --global credential.helper 'cache --timeout=14400'
+  # Empty value resets git's cumulative helper list, dropping macOS's
+  # system-level osxkeychain — see init.sh for the full rationale.
+  git config --global --replace-all credential.helper ""
+  git config --global --add credential.helper 'cache --timeout=14400'
 elif [[ "$MACHINE_TYPE" == "family" ]]; then
   info "Family/other-person machine — cloning over HTTPS with a PAT. Same purge-after-use handling as the employer-machine path."
-  git config --global credential.helper 'cache --timeout=14400'
+  git config --global --replace-all credential.helper ""
+  git config --global --add credential.helper 'cache --timeout=14400'
 fi
 
 ## HELPERS ##
@@ -211,8 +215,16 @@ fi
 # immediately rather than letting the timeout do it eventually.
 if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
   git credential-cache exit 2>/dev/null || true
-  git config --global --unset credential.helper 2>/dev/null || true
-  info "Purged the cached GitHub PAT and reset credential.helper — nothing left lingering."
+  git config --global --unset-all credential.helper 2>/dev/null || true
+  # Belt-and-braces on macOS: any run from before the osxkeychain override
+  # above already persisted the PAT into the login Keychain, and unsetting
+  # the helper does not remove what is already stored there. Deleting by
+  # service is safe — this only targets the github.com internet-password
+  # entry, and a machine of this type has no business keeping one.
+  if [[ "$OSTYPE" == darwin* ]]; then
+    security delete-internet-password -s github.com &>/dev/null || true
+  fi
+  info "Purged the cached GitHub PAT, reset credential.helper, and cleared any Keychain entry — nothing left lingering."
 fi
 
 ## RUN SETUP FOR EACH REPO ##

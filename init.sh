@@ -432,7 +432,15 @@ elif [[ "$MACHINE_TYPE" == "employer" ]]; then
   # that needs it is done, rather than leaving it to expire on its own.
   info "Employer machine — using a GitHub Personal Access Token over HTTPS instead of gh CLI/SSH keys."
   info "You'll be prompted for it once (as the password); it's purged once setup-all.sh finishes cloning/pulling, not left to time out."
-  git config --global credential.helper 'cache --timeout=14400'
+  # macOS ships `credential.helper=osxkeychain` in the SYSTEM gitconfig
+  # (/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig), which
+  # writes the PAT into the login Keychain permanently — exactly what this
+  # machine type must never do, and it survived every earlier cleanup because
+  # those only touched --global. git treats credential.helper as a cumulative
+  # list, and an empty value RESETS that list, dropping the inherited
+  # osxkeychain entry; only the in-memory cache added after it then applies.
+  git config --global --replace-all credential.helper ""
+  git config --global --add credential.helper 'cache --timeout=14400'
   # Same reasoning as the gh device-code pause above — the clone right after
   # this triggers the actual username/password prompt, so make sure the PAT
   # is in hand *before* that happens rather than fumbling for it mid-prompt
@@ -450,7 +458,9 @@ else
   # unconditionally and is saved to disk regardless of what's answered here,
   # ready to be added to any account by hand whenever it's wanted.
   info "Family/other-person machine — cloning with your own PAT over HTTPS (same as employer machines)."
-  git config --global credential.helper 'cache --timeout=14400'
+  # Same osxkeychain override as the employer path above — see there for why.
+  git config --global --replace-all credential.helper ""
+  git config --global --add credential.helper 'cache --timeout=14400'
   read -r -p "About to clone using your GitHub username + Personal Access Token (as the password) — have both ready. Press Enter when ready... "
 
   read -r -p "Set up gh (GitHub CLI) on this machine, for its own GitHub account? [y/N] " _want_gh
