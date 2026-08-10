@@ -6,7 +6,11 @@
 #   ~/Repos/init-me/setup-all.sh
 #
 # Supports: macOS, Linux
-set -euo pipefail
+set -Eeuo pipefail
+# -E (errtrace): without it, the ERR trap below silently skips failures
+# inside command substitutions ($(...)) and functions — found live 2026-08-10
+# debugging a bootstrap.sh death that produced zero trap output despite the
+# trap being in place, because the trap wasn't propagating into subshells.
 trap 'echo "[setup-all] ERROR: died at line $LINENO running: $BASH_COMMAND" >&2' ERR
 
 # Capture this run to a timestamped log, always. Guarded so that when this
