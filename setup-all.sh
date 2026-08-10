@@ -227,13 +227,31 @@ else
   ln -s "$REPOS_DIR/scriptorium/scripts" "$HOME/Scripts"
 fi
 
+# ~/.agents/skills: symlink to clauderc's skills dir if present. Several
+# non-Claude agent tools (VS Code Copilot, others following the
+# agentskills.io open SKILL.md format) look in ~/.agents/skills as one of
+# their discovery paths — this makes the same skills visible there for free
+# instead of duplicating them. No-op if clauderc wasn't installed (employer
+# machines, or family machines that declined the light install).
+if [[ -L "$HOME/.agents/skills" ]]; then
+  info "Step 4: ~/.agents/skills already symlinked, skipping"
+elif [[ -e "$HOME/.agents/skills" ]]; then
+  warn "~/.agents/skills exists but is not a symlink — skipping to avoid overwriting"
+elif [[ -d "$CLAUDERC_DEST/skills" ]]; then
+  info "Step 4: Symlinking ~/.agents/skills → $CLAUDERC_DEST/skills..."
+  mkdir -p "$HOME/.agents"
+  ln -s "$CLAUDERC_DEST/skills" "$HOME/.agents/skills"
+else
+  info "Step 4: ~/.agents/skills (no $CLAUDERC_DEST/skills, skipping)"
+fi
+
 # clauderc: no setup needed (it's just configs, auto-loaded from ~/.claude)
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
-  info "Step 4: clauderc (skipped, employer machine)"
+  info "Step 5: clauderc (skipped, employer machine)"
 elif [[ "$MACHINE_TYPE" == "family" ]]; then
-  info "Step 4: clauderc (light install only if you opted in above, no further setup needed)"
+  info "Step 5: clauderc (light install only if you opted in above, no further setup needed)"
 else
-  info "Step 4: clauderc (no setup needed, already in place)"
+  info "Step 5: clauderc (no setup needed, already in place)"
 fi
 
 ## DONE ##
