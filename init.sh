@@ -48,6 +48,10 @@ if [[ -z "${BOOTSTRAP_LOG_ACTIVE:-}" ]]; then
   mkdir -p "$LOG_DIR"
   LOG_FILE="$LOG_DIR/init-me-$(date +%Y%m%d-%H%M%S).log"
   exec > >(tee -a "$LOG_FILE") 2>&1
+  # See dotfile-matrix/bootstrap.sh for the full rationale: without this,
+  # bash exits without waiting for the tee child, losing whatever it still
+  # had buffered — including the error that killed the script.
+  trap 'exec 1>&- 2>&-; wait' EXIT
   echo "Logging this run to $LOG_FILE"
 fi
 
