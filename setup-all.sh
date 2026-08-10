@@ -7,6 +7,7 @@
 #
 # Supports: macOS, Linux
 set -euo pipefail
+trap 'echo "[setup-all] ERROR: died at line $LINENO running: $BASH_COMMAND" >&2' ERR
 
 # Capture this run to a timestamped log, always. Guarded so that when this
 # runs as part of init.sh's handoff, it inherits init.sh's already-active log
@@ -46,10 +47,10 @@ if [[ -z "${MACHINE_TYPE:-}" ]]; then
   esac
 fi
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
-  info "Employer machine — cloning over HTTPS with a PAT (cached in memory only, never on disk) instead of SSH keys."
+  info "Employer machine — cloning over HTTPS with a PAT instead of SSH keys. The PAT itself never touches disk, but note the cache below is a background daemon with a 4-hour timeout, not scoped to this script run — it's purged explicitly once the last clone/pull below finishes, not left to expire on its own."
   git config --global credential.helper 'cache --timeout=14400'
 elif [[ "$MACHINE_TYPE" == "family" ]]; then
-  info "Family/other-person machine — cloning over HTTPS with a PAT (cached in memory only, never on disk)."
+  info "Family/other-person machine — cloning over HTTPS with a PAT. Same purge-after-use handling as the employer-machine path."
   git config --global credential.helper 'cache --timeout=14400'
 fi
 
@@ -190,6 +191,20 @@ if [[ "$MACHINE_TYPE" == "family" ]]; then
 else
   sync_repo "configgy-smalls" "$REPOS_DIR/configgy-smalls"
   sync_repo "scriptorium" "$REPOS_DIR/scriptorium"
+fi
+
+# Purge the cached PAT now — this is the last git operation over HTTPS that
+# needs it. `credential.helper cache` runs a background daemon that holds
+# the credential for the full --timeout window (4 hours) regardless of
+# whether this script has exited, and is set with --global so it'd also
+# cache the next password any git command on this machine prompts for.
+# Neither of those is acceptable to leave lingering on hardware you don't
+# own, so purge both the live credential and the standing config
+# immediately rather than letting the timeout do it eventually.
+if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
+  git credential-cache exit 2>/dev/null || true
+  git config --global --unset credential.helper 2>/dev/null || true
+  info "Purged the cached GitHub PAT and reset credential.helper — nothing left lingering."
 fi
 
 ## RUN SETUP FOR EACH REPO ##

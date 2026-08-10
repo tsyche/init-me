@@ -8,6 +8,7 @@
 # Supports: macOS, Linux
 # Windows: run inside WSL or Git Bash first (native Windows support is a future add)
 set -euo pipefail
+trap 'echo "[init-me] ERROR: died at line $LINENO running: $BASH_COMMAND" >&2' ERR
 
 ## MACHINE TYPE ##
 
@@ -415,11 +416,14 @@ elif [[ "$MACHINE_TYPE" == "employer" ]]; then
   # identities — none of that belongs on hardware you don't own. Cloning
   # below goes over HTTPS instead, authenticated with a Personal Access
   # Token you create yourself (read-only, scoped to just these repos). git's
-  # own credential prompt handles entering it — `cache` here means it's held
-  # in memory only for this run and auto-expires; never written to disk, and
-  # never handled by this script directly.
+  # own credential prompt handles entering it — never written to disk, and
+  # never handled by this script directly. `cache` runs a background daemon
+  # that holds it for the full --timeout window (4 hours) regardless of
+  # whether this script has exited, not just "for this run" — setup-all.sh
+  # explicitly purges it (git credential-cache exit) once the last clone/pull
+  # that needs it is done, rather than leaving it to expire on its own.
   info "Employer machine — using a GitHub Personal Access Token over HTTPS instead of gh CLI/SSH keys."
-  info "You'll be prompted for it once (as the password); it's cached in memory for this run only."
+  info "You'll be prompted for it once (as the password); it's purged once setup-all.sh finishes cloning/pulling, not left to time out."
   git config --global credential.helper 'cache --timeout=14400'
   # Same reasoning as the gh device-code pause above — the clone right after
   # this triggers the actual username/password prompt, so make sure the PAT
