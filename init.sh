@@ -91,6 +91,51 @@ CLAUDERC_DEST="$HOME/.claude"
 info()  { echo "[init-me] $*"; }
 die()   { echo "[init-me] ERROR: $*" >&2; exit 1; }
 
+# Reads the PAT ONCE and makes it serve every GitHub consumer in the run:
+# git (via the credential helper below) and everything that talks to the
+# GitHub API (mise fetching runtimes, scriptorium's release-binary installer).
+# Before this existed, employer/family machines authenticated for the clone
+# and then hit the API completely unauthenticated — 60 requests/hour instead
+# of 5,000 — which rate-limited the mise stage into failure on 2026-08-11.
+#
+# The token lives only in this process's environment and is inherited by
+# setup-all.sh/bootstrap.sh; setup-all.sh unsets it and drops the helper once
+# the last consumer is done. It is never written to disk, and never echoed:
+#   - `read -s` keeps it off the screen AND out of the tee'd log
+#   - xtrace is force-disabled around the read, then restored — a run started
+#     with `bash -x` would otherwise print the token straight into the log
+#   - the git helper below stores only the NAME of the variable in
+#     ~/.gitconfig, never its value
+prompt_for_pat() {
+  local _xtrace_was_on=""
+  case "$-" in *x*) _xtrace_was_on=1; set +x ;; esac
+
+  echo ""
+  echo "Paste your GitHub Personal Access Token (input hidden)."
+  echo "Fine-grained, Contents:Read-only, scoped to dotfile-matrix/configgy-smalls/scriptorium."
+  read -r -s -p "PAT: " GITHUB_TOKEN || GITHUB_TOKEN=""
+  echo ""
+
+  if [[ -z "$GITHUB_TOKEN" ]]; then
+    [[ -n "$_xtrace_was_on" ]] && set -x
+    die "No token entered — cloning private repos can't proceed on this machine type."
+  fi
+
+  export GITHUB_TOKEN
+  # GH_TOKEN too: gh CLI and several tools read that name instead.
+  export GH_TOKEN="$GITHUB_TOKEN"
+
+  # Feed git from the environment rather than caching the secret anywhere.
+  # Single-quoted on purpose so $GITHUB_TOKEN is expanded by the helper at
+  # call time, NOT by this script when writing the config — the value must
+  # never land in ~/.gitconfig.
+  git config --global --add credential.helper \
+    '!f() { test "$1" = get && printf "username=%s\npassword=%s\n" "${GITHUB_USER:-tsyche}" "${GITHUB_TOKEN}"; }; f'
+
+  [[ -n "$_xtrace_was_on" ]] && set -x
+  info "Token accepted — it now covers git, mise, and release-binary downloads for this run."
+}
+
 # Builds the clone URL for $1 (repo name) — SSH for personal machines
 # (existing behavior, tied to your own GitHub identity), HTTPS with the
 # username embedded for employer-owned AND family/other-person machines, so
@@ -450,22 +495,16 @@ elif [[ "$MACHINE_TYPE" == "employer" ]]; then
   # explicitly purges it (git credential-cache exit) once the last clone/pull
   # that needs it is done, rather than leaving it to expire on its own.
   info "Employer machine — using a GitHub Personal Access Token over HTTPS instead of gh CLI/SSH keys."
-  info "You'll be prompted for it once (as the password); it's purged once setup-all.sh finishes cloning/pulling, not left to time out."
+  info "Enter it once below; it covers cloning AND the GitHub-API downloads later (mise runtimes, release binaries), then is purged."
   # macOS ships `credential.helper=osxkeychain` in the SYSTEM gitconfig
   # (/Library/Developer/CommandLineTools/usr/share/git-core/gitconfig), which
   # writes the PAT into the login Keychain permanently — exactly what this
   # machine type must never do, and it survived every earlier cleanup because
   # those only touched --global. git treats credential.helper as a cumulative
   # list, and an empty value RESETS that list, dropping the inherited
-  # osxkeychain entry; only the in-memory cache added after it then applies.
+  # osxkeychain entry; only the helper added below then applies.
   git config --global --replace-all credential.helper ""
-  git config --global --add credential.helper 'cache --timeout=14400'
-  # Same reasoning as the gh device-code pause above — the clone right after
-  # this triggers the actual username/password prompt, so make sure the PAT
-  # is in hand *before* that happens rather than fumbling for it mid-prompt
-  # (found live: a username/PAT typo here just looks like a plain auth
-  # failure, easy to misdiagnose as something being broken).
-  read -r -p "About to clone using your GitHub username + Personal Access Token (as the password) — have both ready. Press Enter when ready... "
+  prompt_for_pat
 else
   # Family/other person's machine: the initial clone below uses the same
   # PAT-over-HTTPS mechanism as employer machines (you're the one running
@@ -477,10 +516,10 @@ else
   # unconditionally and is saved to disk regardless of what's answered here,
   # ready to be added to any account by hand whenever it's wanted.
   info "Family/other-person machine — cloning with your own PAT over HTTPS (same as employer machines)."
-  # Same osxkeychain override as the employer path above — see there for why.
+  # Same osxkeychain override and single-entry token flow as the employer
+  # path above — see prompt_for_pat for why.
   git config --global --replace-all credential.helper ""
-  git config --global --add credential.helper 'cache --timeout=14400'
-  read -r -p "About to clone using your GitHub username + Personal Access Token (as the password) — have both ready. Press Enter when ready... "
+  prompt_for_pat
 
   read -r -p "Set up gh (GitHub CLI) on this machine, for its own GitHub account? [y/N] " _want_gh
   if [[ "$_want_gh" =~ ^[Yy]$ ]]; then

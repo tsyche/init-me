@@ -249,27 +249,13 @@ else
   sync_repo "scriptorium" "$REPOS_DIR/scriptorium"
 fi
 
-# Purge the cached PAT now — this is the last git operation over HTTPS that
-# needs it. `credential.helper cache` runs a background daemon that holds
-# the credential for the full --timeout window (4 hours) regardless of
-# whether this script has exited, and is set with --global so it'd also
-# cache the next password any git command on this machine prompts for.
-# Neither of those is acceptable to leave lingering on hardware you don't
-# own, so purge both the live credential and the standing config
-# immediately rather than letting the timeout do it eventually.
-if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
-  git credential-cache exit 2>/dev/null || true
-  git config --global --unset-all credential.helper 2>/dev/null || true
-  # Belt-and-braces on macOS: any run from before the osxkeychain override
-  # above already persisted the PAT into the login Keychain, and unsetting
-  # the helper does not remove what is already stored there. Deleting by
-  # service is safe — this only targets the github.com internet-password
-  # entry, and a machine of this type has no business keeping one.
-  if [[ "$OSTYPE" == darwin* ]]; then
-    security delete-internet-password -s github.com &>/dev/null || true
-  fi
-  info "Purged the cached GitHub PAT, reset credential.helper, and cleared any Keychain entry — nothing left lingering."
-fi
+# NOTE: the credential purge deliberately does NOT happen here any more.
+# It used to, right after the last clone/pull — but bootstrap.sh below still
+# needs GITHUB_TOKEN for the GitHub API (mise runtimes in step 6, release
+# binaries in step 6b). Purging here left those unauthenticated at 60
+# requests/hour and rate-limited the mise stage into failure on 2026-08-11.
+# Cleanup now runs in purge_github_credentials() after ALL consumers are
+# done — see the end of this script.
 
 ## RUN SETUP FOR EACH REPO ##
 
@@ -334,6 +320,35 @@ else
 fi
 
 ## DONE ##
+
+# Every GitHub consumer has now run (clones/pulls above, plus bootstrap.sh's
+# mise runtimes and release binaries), so the token can go. Runs via an EXIT
+# trap as well as inline, so an early failure still cleans up rather than
+# leaving a live credential on hardware you don't own.
+purge_github_credentials() {
+  [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]] || return 0
+  unset GITHUB_TOKEN GH_TOKEN
+  git credential-cache exit 2>/dev/null || true
+  git config --global --unset-all credential.helper 2>/dev/null || true
+  # Belt-and-braces on macOS: any run from before the osxkeychain override
+  # already persisted the PAT into the login Keychain, and unsetting the
+  # helper does not remove what is already stored there. Deleting by service
+  # is safe — this only targets the github.com internet-password entry, and a
+  # machine of this type has no business keeping one.
+  if [[ "$OSTYPE" == darwin* ]]; then
+    security delete-internet-password -s github.com &>/dev/null || true
+  fi
+}
+# Superset of the tee-flush EXIT trap set in the logging block above (a bare
+# `trap ... EXIT` here would silently replace it and lose buffered output on
+# a standalone run). Closing the fds and waiting is harmless when no tee is
+# attached, so one trap can safely serve both jobs.
+trap 'purge_github_credentials; exec 1>&- 2>&-; wait' EXIT
+purge_github_credentials
+if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
+  info "Purged the GitHub token, reset credential.helper, and cleared any Keychain entry — nothing left lingering."
+  info "Revoke the PAT on GitHub now that setup is done."
+fi
 
 pending=()
 for d in "$REPOS_DIR/dotfile-matrix" "$CLAUDERC_DEST" "$REPOS_DIR/configgy-smalls" "$REPOS_DIR/scriptorium"; do
