@@ -53,10 +53,18 @@ if [[ -z "${MACHINE_TYPE:-}" ]]; then
   echo "  2) Employer-owned (not your own hardware)"
   echo "  3) Family/other person's machine (not your daily use — setting it up for someone else)"
   read -r -p "Select 1, 2, or 3: " _machine_choice
+  # Explicit branches only — "personal" must never be reached by falling
+  # through. It is the most privileged answer (personal SSH keys, your own
+  # GitHub identity), so guessing it on an unanswered or piped prompt would
+  # put your identity on hardware that may not be yours.
   case "$_machine_choice" in
+    1) export MACHINE_TYPE="personal" ;;
     2) export MACHINE_TYPE="employer" ;;
     3) export MACHINE_TYPE="family" ;;
-    *) export MACHINE_TYPE="personal" ;;
+    *)
+      echo "No valid machine type selected (got '${_machine_choice}'). Re-run and answer 1, 2, or 3." >&2
+      exit 1
+      ;;
   esac
 fi
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
