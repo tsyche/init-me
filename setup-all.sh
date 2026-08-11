@@ -134,6 +134,19 @@ run_step() {
 # Builds the clone URL for $1 (repo name) — SSH for personal machines, HTTPS
 # with the username embedded for employer-owned and family/other-person
 # ones. See init.sh's _clone_url for the full rationale.
+# Employer/family machines clone shallow. Two reasons, both concrete:
+# they authenticate with a short-lived PAT that gets revoked at the end of
+# setup, so they can never pull again anyway and full history buys nothing;
+# and history is where stale content lives — configgy-smalls' iTerm2 plist
+# carried old work project names in its initial commit, which every full
+# clone copied onto every machine including employer-owned ones. Depth 1
+# never downloads them. Personal machines still get full history.
+_clone_depth_args() {
+  if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
+    echo "--depth=1"
+  fi
+}
+
 _clone_url() {
   if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
     echo "https://$GITHUB_USER@github.com/$GITHUB_USER/$1.git"
@@ -166,7 +179,7 @@ sync_repo() {
   # Plain git clone, not `gh repo clone` — see init.sh's sync_repo for why
   # (avoids an unnecessary GraphQL API dependency for a step that doesn't
   # need it).
-  git clone "$(_clone_url "$repo")" "$dest" || die "Failed to clone $repo"
+  git clone $(_clone_depth_args) "$(_clone_url "$repo")" "$dest" || die "Failed to clone $repo"
 }
 
 _adopt_existing_dir() {

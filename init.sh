@@ -145,6 +145,19 @@ prompt_for_pat() {
 # mechanism for the initial clone regardless of whether they later opt into
 # gh/glab CLI for the actual user's own accounts (that's a separate,
 # additional step below, not how dotfile-matrix itself gets here).
+# Employer/family machines clone shallow. Two reasons, both concrete:
+# they authenticate with a short-lived PAT that gets revoked at the end of
+# setup, so they can never pull again anyway and full history buys nothing;
+# and history is where stale content lives — configgy-smalls' iTerm2 plist
+# carried old work project names in its initial commit, which every full
+# clone copied onto every machine including employer-owned ones. Depth 1
+# never downloads them. Personal machines still get full history.
+_clone_depth_args() {
+  if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
+    echo "--depth=1"
+  fi
+}
+
 _clone_url() {
   if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
     echo "https://$GITHUB_USER@github.com/$GITHUB_USER/$1.git"
@@ -189,7 +202,7 @@ sync_repo() {
   # doesn't need since the URL is already known. Found live: repeated heavy
   # gh usage exhausted a GraphQL rate limit and blocked cloning even though
   # a working SSH key already existed.
-  git clone "$(_clone_url "$repo")" "$dest"
+  git clone $(_clone_depth_args) "$(_clone_url "$repo")" "$dest"
 }
 
 _adopt_existing_dir() {
