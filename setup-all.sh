@@ -13,6 +13,11 @@ set -Eeuo pipefail
 # trap being in place, because the trap wasn't propagating into subshells.
 trap 'echo "[setup-all] ERROR: died at line $LINENO running: $BASH_COMMAND" >&2' ERR
 
+# Same reason as init.sh: this script re-clones ~/Repos/*, so it must never
+# be running from inside a directory it might replace. Repeated here because
+# this is also a documented standalone entry point, not only init.sh's handoff.
+cd "$HOME" || cd / || true
+
 # Capture this run to a timestamped log, always. Guarded so that when this
 # runs as part of init.sh's handoff, it inherits init.sh's already-active log
 # instead of starting a redundant second one — only sets up its own when run

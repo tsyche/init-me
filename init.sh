@@ -14,6 +14,17 @@ set -Eeuo pipefail
 # trap being in place, because the trap wasn't propagating into subshells.
 trap 'echo "[init-me] ERROR: died at line $LINENO running: $BASH_COMMAND" >&2' ERR
 
+# Move to a directory this script will never delete, BEFORE anything else
+# runs. This script clones/re-clones ~/Repos/*, so launching it from inside
+# one of those repos (very natural — you were just editing there) pulls the
+# shell's own working directory out from under it mid-run. Once that happens
+# getcwd() fails process-wide and everything downstream breaks in confusing,
+# unrelated-looking ways: "Error: The current working directory must exist to
+# run brew", "fatal: Unable to read current working directory", and
+# bootstrap.sh's own `cd "$(dirname "$0")"` / `$(pwd)`. Found live
+# 2026-08-10 after a run launched from ~/Repos/dotfile-matrix.
+cd "$HOME" || cd / || true
+
 ## MACHINE TYPE ##
 
 # Determines the credential mechanism used below (SSH keys tied to your own
