@@ -67,16 +67,35 @@ if [[ -z "${MACHINE_TYPE:-}" ]]; then
       ;;
   esac
 fi
-if [[ "$MACHINE_TYPE" == "employer" ]]; then
-  info "Employer machine — cloning over HTTPS with a PAT instead of SSH keys. The PAT itself never touches disk, but note the cache below is a background daemon with a 4-hour timeout, not scoped to this script run — it's purged explicitly once the last clone/pull below finishes, not left to expire on its own."
-  # Empty value resets git's cumulative helper list, dropping macOS's
-  # system-level osxkeychain — see init.sh for the full rationale.
-  git config --global --replace-all credential.helper ""
-  git config --global --add credential.helper 'cache --timeout=14400'
-elif [[ "$MACHINE_TYPE" == "family" ]]; then
-  info "Family/other-person machine — cloning over HTTPS with a PAT. Same purge-after-use handling as the employer-machine path."
-  git config --global --replace-all credential.helper ""
-  git config --global --add credential.helper 'cache --timeout=14400'
+if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    # init.sh already prompted and installed an env-backed credential helper,
+    # and exported the token to us. Touching credential.helper here would
+    # replace that helper and make git prompt for the SAME token a second
+    # time — which it did, until 2026-08-11.
+    info "Reusing the GitHub token already entered in init.sh — no second prompt."
+  else
+    # Standalone run (this script is also a documented entry point), so no
+    # token has been collected yet. Reset the helper list first: an empty
+    # value drops macOS's system-level osxkeychain, which would otherwise
+    # persist the PAT into the login Keychain permanently. Then prompt once,
+    # using the same env-backed helper as init.sh so the token covers the
+    # GitHub API (mise runtimes, release binaries) too, not just cloning.
+    git config --global --replace-all credential.helper ""
+    echo ""
+    echo "Paste your GitHub Personal Access Token (input hidden)."
+    _xtrace_was_on=""
+    case "$-" in *x*) _xtrace_was_on=1; set +x ;; esac
+    read -r -s -p "PAT: " GITHUB_TOKEN || GITHUB_TOKEN=""
+    echo ""
+    [[ -n "$GITHUB_TOKEN" ]] || die "No token entered — can't clone private repos on this machine type."
+    export GITHUB_TOKEN
+    export GH_TOKEN="$GITHUB_TOKEN"
+    git config --global --add credential.helper \
+      '!f() { test "$1" = get && printf "username=%s\npassword=%s\n" "${GITHUB_USER:-tsyche}" "${GITHUB_TOKEN}"; }; f'
+    [[ -n "$_xtrace_was_on" ]] && set -x
+    info "Token accepted — covers git, mise, and release-binary downloads for this run."
+  fi
 fi
 
 ## HELPERS ##
