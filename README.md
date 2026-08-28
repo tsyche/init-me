@@ -60,7 +60,13 @@ system-level, it survives anything set or unset at `--global` scope.
 | `configgy-smalls` | `~/Repos/configgy-smalls` | GUI app preferences (iTerm2, etc.) |
 | `scriptorium` | `~/Repos/scriptorium` | Personal scripts |
 
-After cloning, hands off to `dotfile-matrix/bootstrap.sh` which handles everything else (packages, symlinks, SSH key generation, runtimes, etc.).
+After cloning, hands off to `setup-all.sh` (syncs the repos, sets up `~/Scripts`
+and `~/.agents/skills` symlinks, purges the GitHub credential once nothing needs
+it anymore), which in turn runs `dotfile-matrix/bootstrap.sh` for everything else
+(packages, SSH key generation, runtimes, etc.). `setup-all.sh` is also its own
+standalone entry point — safe to re-run directly (`~/Repos/init-me/setup-all.sh`)
+any time you just want to re-sync/re-run setup without repeating the credential
+flow from scratch.
 
 Employer-owned and family/other-person machines don't get the full set above — both are meant to hold less of *your* personal material, just less of it:
 
@@ -86,9 +92,11 @@ The first two are written by direct file append specifically so they survive
 a crash — the transcript goes through `tee`, which can lose buffered output
 at exactly the moment a script dies.
 
-Failures are reported with the real exit code (`rc=127` means the script was
-never found and never ran; `rc=1` means it ran and failed) — not a generic
-"had issues".
+Failures are reported with the real exit code and what it means, not a
+generic "had issues": a missing or non-executable script gets its own
+explicit message before it's even invoked; `rc=126` means it couldn't be
+executed; `rc=127` means it ran but called a command that doesn't exist;
+anything else reports the raw exit code.
 
 To run `bootstrap.sh` alone and watch it live, bypassing the log capture:
 
