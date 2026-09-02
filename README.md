@@ -38,7 +38,7 @@ Settings → Developer settings → Personal access tokens → Fine-grained toke
 | Field | Value |
 |---|---|
 | Resource owner | `tsyche` (the account owning these repos) |
-| Repository access | Select `dotfile-matrix`, `configgy-smalls`, and `scriptorium`; family users who may install the optional agent skills/scripts must also select `clauderc` (renamed `agentrc` after migration) |
+| Repository access | Select `dotfile-matrix`, `configgy-smalls`, and `scriptorium`; family users who may install the optional agent skills/scripts must also select `agentrc` |
 | Permissions | Repository → **Contents: Read-only** (nothing else) |
 | Expiration | Shortest offered — a bootstrap takes minutes, not days |
 

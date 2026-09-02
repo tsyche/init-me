@@ -1,5 +1,5 @@
 #!/bin/bash
-# Unified setup for all 4 repos: dotfile-matrix, clauderc, configgy-smalls, scriptorium
+# Unified setup for all 4 repos: dotfile-matrix, agentrc, configgy-smalls, scriptorium
 # Idempotent — safe to re-run anytime. Clones missing repos, pulls latest, runs setup for each.
 #
 # Usage:
@@ -37,7 +37,7 @@ fi
 
 GITHUB_USER="tsyche"
 REPOS_DIR="$HOME/Repos"
-CLAUDERC_DEST="$HOME/.claude"
+AGENTRC_DEST="$HOME/.claude"
 AGENTRC_INSTALLER="$REPOS_DIR/init-me/scripts/install-agentrc.sh"
 
 info()  { echo "[setup-all] $*"; }
@@ -249,35 +249,35 @@ mkdir -p "$REPOS_DIR"
 # Clone/pull dotfile-matrix
 sync_repo "dotfile-matrix" "$REPOS_DIR/dotfile-matrix"
 
-# Clone/pull clauderc — skipped on employer machines, since Claude Code
+# Clone/pull agentrc — skipped on employer machines, since Claude Code
 # itself (claude-code@latest) is already in bootstrap.sh's EMPLOYER_EXCLUDES
 # and never gets installed there; nothing to serve its config repo either.
 # Family/other-person machines get the same "light" skills/scripts-only
 # treatment as init.sh — see there for the full rationale.
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
-  info "Employer machine — skipping clauderc (Claude Code isn't installed there either)."
+  info "Employer machine — skipping agentrc (Claude Code isn't installed there either)."
 elif [[ "$MACHINE_TYPE" == "family" ]]; then
-  read -r -p "Install the custom Claude skills/scripts on this machine? [y/N] " _want_clauderc_light
-  if [[ "$_want_clauderc_light" =~ ^[Yy]$ ]]; then
-    info "Installing skills/scripts only (not a full clauderc clone)..."
-    _tmp_clauderc="$(mktemp -d)"
-    git clone --quiet --depth=1 "$(_clone_url "clauderc")" "$_tmp_clauderc"
-    mkdir -p "$CLAUDERC_DEST"
-    _claude_source="$_tmp_clauderc"
-    [[ -d "$_tmp_clauderc/.claude" ]] && _claude_source="$_tmp_clauderc/.claude"
-    cp -a "$_claude_source/skills" "$CLAUDERC_DEST/" 2>/dev/null || true
-    cp -a "$_claude_source/scripts" "$CLAUDERC_DEST/" 2>/dev/null || true
-    rm -rf "$_tmp_clauderc"
-    info "skills/scripts installed to $CLAUDERC_DEST."
+  read -r -p "Install the custom Claude skills/scripts on this machine? [y/N] " _want_agentrc_light
+  if [[ "$_want_agentrc_light" =~ ^[Yy]$ ]]; then
+    info "Installing skills/scripts only (not a full agentrc clone)..."
+    _tmp_agentrc="$(mktemp -d)"
+    git clone --quiet --depth=1 "$(_clone_url "agentrc")" "$_tmp_agentrc"
+    mkdir -p "$AGENTRC_DEST"
+    _claude_source="$_tmp_agentrc"
+    [[ -d "$_tmp_agentrc/.claude" ]] && _claude_source="$_tmp_agentrc/.claude"
+    cp -a "$_claude_source/skills" "$AGENTRC_DEST/" 2>/dev/null || true
+    cp -a "$_claude_source/scripts" "$AGENTRC_DEST/" 2>/dev/null || true
+    rm -rf "$_tmp_agentrc"
+    info "skills/scripts installed to $AGENTRC_DEST."
   fi
 else
   set +e
-  "$AGENTRC_INSTALLER" "$(_clone_url "clauderc")"
+  "$AGENTRC_INSTALLER" "$(_clone_url "agentrc")"
   _agentrc_status=$?
   set -e
   if (( _agentrc_status == 3 )); then
     info "Remote still uses the legacy clauderc tree; keeping the current layout."
-    sync_repo "clauderc" "$CLAUDERC_DEST"
+    sync_repo "agentrc" "$AGENTRC_DEST"
   elif (( _agentrc_status != 0 )); then
     die "agentrc installation failed (rc=$_agentrc_status)"
   fi
@@ -336,31 +336,31 @@ else
   ln -s "$REPOS_DIR/scriptorium/scripts" "$HOME/Scripts"
 fi
 
-# ~/.agents/skills: symlink to clauderc's skills dir if present. Several
+# ~/.agents/skills: symlink to agentrc's skills dir if present. Several
 # non-Claude agent tools (VS Code Copilot, others following the
 # agentskills.io open SKILL.md format) look in ~/.agents/skills as one of
 # their discovery paths — this makes the same skills visible there for free
-# instead of duplicating them. No-op if clauderc wasn't installed (employer
+# instead of duplicating them. No-op if agentrc wasn't installed (employer
 # machines, or family machines that declined the light install).
 if [[ -L "$HOME/.agents/skills" ]]; then
   info "Step 4: ~/.agents/skills already symlinked, skipping"
 elif [[ -e "$HOME/.agents/skills" ]]; then
   warn "~/.agents/skills exists but is not a symlink — skipping to avoid overwriting"
-elif [[ -d "$CLAUDERC_DEST/skills" ]]; then
-  info "Step 4: Symlinking ~/.agents/skills → $CLAUDERC_DEST/skills..."
+elif [[ -d "$AGENTRC_DEST/skills" ]]; then
+  info "Step 4: Symlinking ~/.agents/skills → $AGENTRC_DEST/skills..."
   mkdir -p "$HOME/.agents"
-  ln -s "$CLAUDERC_DEST/skills" "$HOME/.agents/skills"
+  ln -s "$AGENTRC_DEST/skills" "$HOME/.agents/skills"
 else
-  info "Step 4: ~/.agents/skills (no $CLAUDERC_DEST/skills, skipping)"
+  info "Step 4: ~/.agents/skills (no $AGENTRC_DEST/skills, skipping)"
 fi
 
-# clauderc: no setup needed (it's just configs, auto-loaded from ~/.claude)
+# agentrc: no setup needed (it's just configs, auto-loaded from ~/.claude)
 if [[ "$MACHINE_TYPE" == "employer" ]]; then
-  info "Step 5: clauderc (skipped, employer machine)"
+  info "Step 5: agentrc (skipped, employer machine)"
 elif [[ "$MACHINE_TYPE" == "family" ]]; then
-  info "Step 5: clauderc (light install only if you opted in above, no further setup needed)"
+  info "Step 5: agentrc (light install only if you opted in above, no further setup needed)"
 else
-  info "Step 5: clauderc (no setup needed, already in place)"
+  info "Step 5: agentrc (no setup needed, already in place)"
 fi
 
 ## DONE ##
@@ -395,7 +395,7 @@ if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
 fi
 
 pending=()
-for d in "$REPOS_DIR/dotfile-matrix" "$CLAUDERC_DEST" "$REPOS_DIR/configgy-smalls" "$REPOS_DIR/scriptorium"; do
+for d in "$REPOS_DIR/dotfile-matrix" "$AGENTRC_DEST" "$REPOS_DIR/configgy-smalls" "$REPOS_DIR/scriptorium"; do
   if [[ -d "$d/.merge-pending" ]] && [[ -n "$(ls -A "$d/.merge-pending" 2>/dev/null)" ]]; then
     pending+=("$d/.merge-pending")
   fi

@@ -80,13 +80,13 @@ REPOS_DIR="$HOME/Repos"
 PRIVATE_REPOS=(
   "init-me"
   "dotfile-matrix"
-  "clauderc"
+  "agentrc"
   "configgy-smalls"
   "scriptorium"
 )
 
-# clauderc clones directly into ~/.claude, not ~/Repos
-CLAUDERC_DEST="$HOME/.claude"
+# agentrc clones directly into ~/.claude, not ~/Repos
+AGENTRC_DEST="$HOME/.claude"
 AGENTRC_INSTALLER="$REPOS_DIR/init-me/scripts/install-agentrc.sh"
 
 info()  { echo "[init-me] $*"; }
@@ -579,35 +579,35 @@ fi
 mkdir -p "$REPOS_DIR"
 
 for repo in "${PRIVATE_REPOS[@]}"; do
-  if [[ "$repo" == "clauderc" ]]; then
+  if [[ "$repo" == "agentrc" ]]; then
     # Claude Code itself (claude-code@latest) is already in bootstrap.sh's
     # EMPLOYER_EXCLUDES, so it's never installed on an employer machine —
     # cloning its config repo there would have nothing to serve. Keeps PAT
     # scoping simpler too: one less repo to grant it access to.
     if [[ "$MACHINE_TYPE" == "employer" ]]; then
-      info "Employer machine — skipping clauderc (Claude Code isn't installed there either)."
+      info "Employer machine — skipping agentrc (Claude Code isn't installed there either)."
       continue
     elif [[ "$MACHINE_TYPE" == "family" ]]; then
-      # "Light" install, not a full clauderc clone — copies just skills/ and
+      # "Light" install, not a full agentrc clone — copies just skills/ and
       # scripts/ out of a throwaway temp clone, then discards the temp
       # clone's git history entirely. ~/.claude on this machine is NOT a git
-      # checkout of clauderc: no per-project memory, no plans, nothing of
+      # checkout of agentrc: no per-project memory, no plans, nothing of
       # yours ends up here, and nothing this machine's owner does in Claude
       # Code can accidentally get pushed back to your repo. Updating later
       # means re-running the copy, not `git pull` — see scriptorium's
       # refresh script.
-      read -r -p "Install the custom Claude skills/scripts on this machine? [y/N] " _want_clauderc_light
-      if [[ "$_want_clauderc_light" =~ ^[Yy]$ ]]; then
-        info "Installing skills/scripts only (not a full clauderc clone)..."
-        _tmp_clauderc="$(mktemp -d)"
-        git clone --quiet --depth=1 "$(_clone_url "$repo")" "$_tmp_clauderc"
-        mkdir -p "$CLAUDERC_DEST"
-        _claude_source="$_tmp_clauderc"
-        [[ -d "$_tmp_clauderc/.claude" ]] && _claude_source="$_tmp_clauderc/.claude"
-        cp -a "$_claude_source/skills" "$CLAUDERC_DEST/" 2>/dev/null || true
-        cp -a "$_claude_source/scripts" "$CLAUDERC_DEST/" 2>/dev/null || true
-        rm -rf "$_tmp_clauderc"
-        info "skills/scripts installed to $CLAUDERC_DEST."
+      read -r -p "Install the custom Claude skills/scripts on this machine? [y/N] " _want_agentrc_light
+      if [[ "$_want_agentrc_light" =~ ^[Yy]$ ]]; then
+        info "Installing skills/scripts only (not a full agentrc clone)..."
+        _tmp_agentrc="$(mktemp -d)"
+        git clone --quiet --depth=1 "$(_clone_url "$repo")" "$_tmp_agentrc"
+        mkdir -p "$AGENTRC_DEST"
+        _claude_source="$_tmp_agentrc"
+        [[ -d "$_tmp_agentrc/.claude" ]] && _claude_source="$_tmp_agentrc/.claude"
+        cp -a "$_claude_source/skills" "$AGENTRC_DEST/" 2>/dev/null || true
+        cp -a "$_claude_source/scripts" "$AGENTRC_DEST/" 2>/dev/null || true
+        rm -rf "$_tmp_agentrc"
+        info "skills/scripts installed to $AGENTRC_DEST."
       fi
       continue
     fi
@@ -623,13 +623,13 @@ for repo in "${PRIVATE_REPOS[@]}"; do
       fi
       info "Remote still uses the legacy clauderc tree; keeping the current layout."
     fi
-    dest="$CLAUDERC_DEST"
+    dest="$AGENTRC_DEST"
   else
     # configgy-smalls (your GUI app prefs) and scriptorium (your personal
     # scripts) are exactly the "specific to you" content a family/other-
     # person machine shouldn't carry — dotfile-matrix (the actual tools) is
     # the only private repo this machine type gets, plus optionally
-    # clauderc-light above.
+    # agentrc-light above.
     if [[ "$MACHINE_TYPE" == "family" ]] && { [[ "$repo" == "configgy-smalls" ]] || [[ "$repo" == "scriptorium" ]]; }; then
       info "Family/other-person machine — skipping $repo (not applicable here)."
       continue
