@@ -1,6 +1,10 @@
 # init-me
 
-One command to bootstrap a new machine. Installs Homebrew, authenticates GitHub, clones all config repos, and kicks off the full setup.
+## TL;DR
+
+Bootstrap a blank macOS or Linux machine into the tracked personal setup.
+Personal installs safely adopt agentrc's `$HOME` worktree; reduced-trust
+machine types receive narrower configuration.
 
 ## Usage
 
@@ -34,15 +38,16 @@ Settings → Developer settings → Personal access tokens → Fine-grained toke
 | Field | Value |
 |---|---|
 | Resource owner | `tsyche` (the account owning these repos) |
-| Repository access | Only select repositories: `dotfile-matrix`, `configgy-smalls`, `scriptorium` |
+| Repository access | Select `dotfile-matrix`, `configgy-smalls`, and `scriptorium`; family users who may install the optional agent skills/scripts must also select `clauderc` (renamed `agentrc` after migration) |
 | Permissions | Repository → **Contents: Read-only** (nothing else) |
 | Expiration | Shortest offered — a bootstrap takes minutes, not days |
 
 Enter it at git's password prompt (the username is pre-filled). **Revoke it
 once setup finishes** rather than waiting for expiry.
 
-`clauderc` is deliberately absent from that list — it isn't cloned on either
-machine type.
+Employer machines skip agent configuration. Family machines clone the private
+agent repository only when the optional history-free skills/scripts copy is
+selected, so their token needs that additional repository in that case.
 
 The token is never written to disk by these scripts, and cleanup after the
 last clone purges git's credential cache, resets `credential.helper`, and
@@ -56,7 +61,7 @@ system-level, it survives anything set or unset at `--global` scope.
 | Repo | Destination | What it is |
 |------|-------------|------------|
 | `dotfile-matrix` | `~/Repos/dotfile-matrix` | Shell config, Brewfile, symlinks, SSH keys |
-| `clauderc` | `~/.claude` | Claude Code skills, hooks, CLAUDE.md |
+| `agentrc` | `~/.agentrc/.git` + `$HOME` worktree after migration; legacy `~/.claude` fallback until then | Portable Claude/Codex configuration and shared agent tooling |
 | `configgy-smalls` | `~/Repos/configgy-smalls` | GUI app preferences (iTerm2, etc.) |
 | `scriptorium` | `~/Repos/scriptorium` | Personal scripts |
 
@@ -70,9 +75,9 @@ flow from scratch.
 
 Employer-owned and family/other-person machines don't get the full set above — both are meant to hold less of *your* personal material, just less of it:
 
-| Machine type | `clauderc` | `configgy-smalls` | `scriptorium` |
+| Machine type | `agentrc` | `configgy-smalls` | `scriptorium` |
 |---|---|---|---|
-| Personal | Full clone | Full clone | Full clone |
+| Personal | Full `$HOME` worktree after migration; legacy `~/.claude` clone until the remote layout changes | Full clone | Full clone |
 | Employer-owned | Skipped — Claude Code itself isn't installed there either | Full clone | Full clone |
 | Family/other-person | Optional — skills/scripts copied only (no git history, no memory/plans), prompted at setup | Skipped | Skipped |
 

@@ -38,6 +38,7 @@ fi
 GITHUB_USER="tsyche"
 REPOS_DIR="$HOME/Repos"
 CLAUDERC_DEST="$HOME/.claude"
+AGENTRC_INSTALLER="$REPOS_DIR/init-me/scripts/install-agentrc.sh"
 
 info()  { echo "[setup-all] $*"; }
 warn()  { echo "[setup-all] WARNING: $*" >&2; }
@@ -262,13 +263,24 @@ elif [[ "$MACHINE_TYPE" == "family" ]]; then
     _tmp_clauderc="$(mktemp -d)"
     git clone --quiet --depth=1 "$(_clone_url "clauderc")" "$_tmp_clauderc"
     mkdir -p "$CLAUDERC_DEST"
-    cp -a "$_tmp_clauderc/skills" "$CLAUDERC_DEST/" 2>/dev/null || true
-    cp -a "$_tmp_clauderc/scripts" "$CLAUDERC_DEST/" 2>/dev/null || true
+    _claude_source="$_tmp_clauderc"
+    [[ -d "$_tmp_clauderc/.claude" ]] && _claude_source="$_tmp_clauderc/.claude"
+    cp -a "$_claude_source/skills" "$CLAUDERC_DEST/" 2>/dev/null || true
+    cp -a "$_claude_source/scripts" "$CLAUDERC_DEST/" 2>/dev/null || true
     rm -rf "$_tmp_clauderc"
     info "skills/scripts installed to $CLAUDERC_DEST."
   fi
 else
-  sync_repo "clauderc" "$CLAUDERC_DEST"
+  set +e
+  "$AGENTRC_INSTALLER" "$(_clone_url "clauderc")"
+  _agentrc_status=$?
+  set -e
+  if (( _agentrc_status == 3 )); then
+    info "Remote still uses the legacy clauderc tree; keeping the current layout."
+    sync_repo "clauderc" "$CLAUDERC_DEST"
+  elif (( _agentrc_status != 0 )); then
+    die "agentrc installation failed (rc=$_agentrc_status)"
+  fi
 fi
 
 # Clone/pull configgy-smalls and scriptorium — skipped entirely on
