@@ -45,6 +45,59 @@ ln -s ../.claude/TOOLS.md "$migrated/.codex/TOOLS.md"
 git -C "$migrated" add .
 git -C "$migrated" commit -qm migrated
 
+legacy_checkout_home="$TEST_ROOT/legacy-checkout-home"
+mkdir -p "$legacy_checkout_home/.claude"
+make_repo "$legacy_checkout_home/.claude"
+printf 'local memory\n' > "$legacy_checkout_home/.claude/MEMORY.md"
+git -C "$legacy_checkout_home/.claude" add .
+git -C "$legacy_checkout_home/.claude" commit -qm 'local legacy work'
+set +e
+HOME="$legacy_checkout_home" "$ROOT/scripts/install-agentrc.sh" "$migrated"
+legacy_checkout_status=$?
+set -e
+[[ "$legacy_checkout_status" == 4 ]] \
+  || fail "legacy checkout returned $legacy_checkout_status, expected 4"
+[[ ! -e "$legacy_checkout_home/.agentrc" ]] \
+  || fail "legacy checkout created .agentrc before its metadata was preserved"
+
+wrong_root_home="$TEST_ROOT/wrong-root-home"
+mkdir -p "$wrong_root_home"
+git clone -q "$migrated" "$wrong_root_home/.claude"
+set +e
+wrong_root_output="$(HOME="$wrong_root_home" "$ROOT/scripts/install-agentrc.sh" "$migrated" 2>&1)"
+wrong_root_status=$?
+set -e
+[[ "$wrong_root_status" == 6 ]] \
+  || fail "wrong-root checkout returned $wrong_root_status, expected 6"
+grep -Fq 'one level too deep' <<< "$wrong_root_output" \
+  || fail "wrong-root checkout did not explain the detected topology"
+[[ ! -e "$wrong_root_home/.agentrc" ]] \
+  || fail "wrong-root checkout created the real .agentrc directory"
+mkdir -p "$wrong_root_home/wrong-root-backup"
+mv "$wrong_root_home/.claude/.git" "$wrong_root_home/wrong-root-backup/clauderc.git"
+set +e
+HOME="$wrong_root_home" "$ROOT/scripts/install-agentrc.sh" "$migrated" >/dev/null 2>&1
+wrong_root_without_git_status=$?
+set -e
+[[ "$wrong_root_without_git_status" == 6 ]] \
+  || fail "wrong-root checkout without .git returned $wrong_root_without_git_status, expected 6"
+for wrong_root_path in .agentrc .claude .codex .gitignore README.md; do
+  if [[ -e "$wrong_root_home/.claude/$wrong_root_path" \
+    || -L "$wrong_root_home/.claude/$wrong_root_path" ]]; then
+    mv "$wrong_root_home/.claude/$wrong_root_path" \
+      "$wrong_root_home/wrong-root-backup/$wrong_root_path"
+  fi
+done
+HOME="$wrong_root_home" "$ROOT/scripts/install-agentrc.sh" "$migrated"
+git -C "$wrong_root_home" --git-dir="$wrong_root_home/.agentrc/.git" \
+  --work-tree="$wrong_root_home" diff --quiet \
+  || fail "recovered wrong-root worktree differs from HEAD"
+git -C "$wrong_root_home" --git-dir="$wrong_root_home/.agentrc/.git" \
+  --work-tree="$wrong_root_home" diff --cached --quiet \
+  || fail "recovered wrong-root index differs from HEAD"
+[[ -d "$wrong_root_home/wrong-root-backup/clauderc.git" ]] \
+  || fail "wrong-root recovery did not preserve legacy Git metadata"
+
 migrated_home="$TEST_ROOT/migrated-home"
 mkdir -p "$migrated_home/.claude" "$migrated_home/.codex"
 printf 'local version\n' > "$migrated_home/.claude/tracked"
@@ -61,5 +114,7 @@ find "$migrated_home/agentrc-bootstrap-backup" -type f -name tracked -exec grep 
   -print | grep -q . || fail "conflicting tracked file was not backed up"
 git -C "$migrated_home" --git-dir="$migrated_home/.agentrc/.git" --work-tree="$migrated_home" diff --quiet \
   || fail "installed tracked tree differs from HEAD"
+git -C "$migrated_home" --git-dir="$migrated_home/.agentrc/.git" --work-tree="$migrated_home" diff --cached --quiet \
+  || fail "installed index differs from HEAD"
 
 echo "agentrc bootstrap tests passed"

@@ -1,6 +1,9 @@
 #!/bin/bash
 # Install or update agentrc without moving either live vendor directory.
 # Exit 3 means the remote still has the legacy clauderc tree.
+# Exit 4 means local legacy metadata must be preserved and moved first.
+# Exit 5 means the installed index/worktree failed its clean-state gate.
+# Exit 6 means a migrated checkout was pulled through the wrong worktree root.
 set -euo pipefail
 
 remote_url="${1:?usage: install-agentrc.sh REMOTE_URL}"
@@ -17,6 +20,18 @@ if [[ -d "$HOME/.agentrc/.git" ]]; then
   agentrc_git merge --ff-only --quiet "origin/$branch"
   echo "[agentrc] Updated existing agentrc worktree."
   exit 0
+fi
+
+if [[ -e "$HOME/.claude/.agentrc/AGENTS.md" ]]; then
+  echo "[agentrc] ERROR: The migrated tree appears to be checked out one level too deep under $HOME/.claude." >&2
+  echo "[agentrc] Preserve the legacy repository and quarantine the wrong-root checkout before retrying." >&2
+  exit 6
+fi
+
+if [[ -e "$HOME/.claude/.git" || -L "$HOME/.claude/.git" ]]; then
+  echo "[agentrc] ERROR: Legacy Git metadata still exists at $HOME/.claude/.git." >&2
+  echo "[agentrc] Preserve and move it outside $HOME/.claude before rerunning this installer." >&2
+  exit 4
 fi
 
 git clone --quiet --no-checkout "$remote_url" "$tmp/repo"
@@ -64,6 +79,12 @@ done < <(find "$tmp/tree" \( -type f -o -type l \) -print0)
 mkdir -p "$HOME/.agentrc"
 mv "$tmp/repo/.git" "$HOME/.agentrc/.git"
 agentrc_git config core.worktree "$HOME"
+agentrc_git read-tree --reset HEAD
+
+if ! agentrc_git diff --quiet || ! agentrc_git diff --cached --quiet; then
+  echo "[agentrc] ERROR: Installed worktree or index differs from HEAD; do not run an agent sync." >&2
+  exit 5
+fi
 
 if (( conflicts > 0 )); then
   echo "[agentrc] WARNING: $conflicts conflicting tracked file(s) were preserved at $backup_dir" >&2

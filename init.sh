@@ -85,7 +85,8 @@ PRIVATE_REPOS=(
   "scriptorium"
 )
 
-# agentrc clones directly into ~/.claude, not ~/Repos
+# Full agentrc installs keep metadata in ~/.agentrc and use $HOME as the
+# worktree. AGENTRC_DEST remains ~/.claude for legacy fallback and light installs.
 AGENTRC_DEST="$HOME/.claude"
 AGENTRC_INSTALLER="$REPOS_DIR/init-me/scripts/install-agentrc.sh"
 
