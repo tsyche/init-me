@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
+        if: runner.os == 'Linux'
         run: shellcheck init.sh setup-all.sh scripts/*.sh tests/*.sh
       - name: tests
         run: for t in tests/*.test.sh; do bash "$t"; done
