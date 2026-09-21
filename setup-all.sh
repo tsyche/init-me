@@ -92,6 +92,7 @@ if [[ "$MACHINE_TYPE" == "employer" || "$MACHINE_TYPE" == "family" ]]; then
     [[ -n "$GITHUB_TOKEN" ]] || die "No token entered — can't clone private repos on this machine type."
     export GITHUB_TOKEN
     export GH_TOKEN="$GITHUB_TOKEN"
+    # shellcheck disable=SC2016
     git config --global --add credential.helper \
       '!f() { test "$1" = get && printf "username=%s\npassword=%s\n" "${GITHUB_USER:-tsyche}" "${GITHUB_TOKEN}"; }; f'
     [[ -n "$_xtrace_was_on" ]] && set -x
@@ -180,6 +181,7 @@ sync_repo() {
   # Plain git clone, not `gh repo clone` — see init.sh's sync_repo for why
   # (avoids an unnecessary GraphQL API dependency for a step that doesn't
   # need it).
+  # shellcheck disable=SC2046
   git clone $(_clone_depth_args) "$(_clone_url "$repo")" "$dest" || die "Failed to clone $repo"
 }
 
@@ -190,7 +192,8 @@ _adopt_existing_dir() {
   info "$dest already has content but isn't a git checkout — adopting $repo without overwriting anything..."
   git clone --quiet "$(_clone_url "$repo")" "$tmp" || { warn "Failed to clone $repo for adoption"; rm -rf "$tmp"; return; }
 
-  local backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
+  local backup_dir
+  backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
   local staged=0
 
   while IFS= read -r relpath; do
@@ -235,8 +238,7 @@ _adopt_existing_dir() {
 ## OS CHECK ##
 
 case "$OSTYPE" in
-  darwin*) OS=mac ;;
-  linux*)  OS=linux ;;
+  darwin*|linux*) ;;
   *)
     die "Unsupported OS: $OSTYPE"
     ;;
@@ -330,6 +332,7 @@ if [[ "$MACHINE_TYPE" == "family" ]]; then
 elif [[ -L "$HOME/Scripts" ]]; then
   info "Step 3: ~/Scripts already symlinked, skipping"
 elif [[ -e "$HOME/Scripts" ]]; then
+  # shellcheck disable=SC2088
   warn "~/Scripts exists but is not a symlink — skipping to avoid overwriting"
 else
   info "Step 3: Symlinking ~/Scripts → $REPOS_DIR/scriptorium/scripts..."
@@ -345,6 +348,7 @@ fi
 if [[ -L "$HOME/.agents/skills" ]]; then
   info "Step 4: ~/.agents/skills already symlinked, skipping"
 elif [[ -e "$HOME/.agents/skills" ]]; then
+  # shellcheck disable=SC2088
   warn "~/.agents/skills exists but is not a symlink — skipping to avoid overwriting"
 elif [[ -d "$AGENTRC_DEST/skills" ]]; then
   info "Step 4: Symlinking ~/.agents/skills → $AGENTRC_DEST/skills..."

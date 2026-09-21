@@ -131,6 +131,7 @@ prompt_for_pat() {
   # Single-quoted on purpose so $GITHUB_TOKEN is expanded by the helper at
   # call time, NOT by this script when writing the config — the value must
   # never land in ~/.gitconfig.
+  # shellcheck disable=SC2016
   git config --global --add credential.helper \
     '!f() { test "$1" = get && printf "username=%s\npassword=%s\n" "${GITHUB_USER:-tsyche}" "${GITHUB_TOKEN}"; }; f'
 
@@ -204,6 +205,7 @@ sync_repo() {
   # doesn't need since the URL is already known. Found live: repeated heavy
   # gh usage exhausted a GraphQL rate limit and blocked cloning even though
   # a working SSH key already existed.
+  # shellcheck disable=SC2046
   git clone $(_clone_depth_args) "$(_clone_url "$repo")" "$dest"
 }
 
@@ -214,7 +216,8 @@ _adopt_existing_dir() {
   info "$dest already has content but isn't a git checkout — adopting $repo without overwriting anything..."
   git clone --quiet "$(_clone_url "$repo")" "$tmp"
 
-  local backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
+  local backup_dir
+  backup_dir="$dest/.merge-pending/$(date +%Y%m%d%H%M%S)"
   local staged=0
 
   while IFS= read -r relpath; do

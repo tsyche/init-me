@@ -1,5 +1,7 @@
 # init-me
 
+[![ci](https://github.com/tsyche/init-me/actions/workflows/ci.yml/badge.svg)](https://github.com/tsyche/init-me/actions/workflows/ci.yml)
+
 ## TL;DR
 
 Bootstrap a blank macOS or Linux machine into the tracked personal setup.
