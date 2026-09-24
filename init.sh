@@ -85,6 +85,13 @@ PRIVATE_REPOS=(
   "scriptorium"
 )
 
+# Public personal repos — cloneable without the private-repo PAT scope,
+# but still useful on a fresh machine. untapped is the GitHub-release
+# binary installer (engine for the package list in scriptorium's conf).
+PUBLIC_REPOS=(
+  "untapped"
+)
+
 # Full agentrc installs keep metadata in ~/.agentrc and use $HOME as the
 # worktree. AGENTRC_DEST remains ~/.claude for legacy fallback and light installs.
 AGENTRC_DEST="$HOME/.claude"
@@ -95,7 +102,7 @@ die()   { echo "[init-me] ERROR: $*" >&2; exit 1; }
 
 # Reads the PAT ONCE and makes it serve every GitHub consumer in the run:
 # git (via the credential helper below) and everything that talks to the
-# GitHub API (mise fetching runtimes, scriptorium's release-binary installer).
+# GitHub API (mise fetching runtimes, untapped's release-binary installer).
 # Before this existed, employer/family machines authenticated for the clone
 # and then hit the API completely unauthenticated — 60 requests/hour instead
 # of 5,000 — which rate-limited the mise stage into failure on 2026-08-11.
@@ -642,6 +649,10 @@ for repo in "${PRIVATE_REPOS[@]}"; do
   fi
 
   sync_repo "$repo" "$dest"
+done
+
+for repo in "${PUBLIC_REPOS[@]}"; do
+  sync_repo "$repo" "$REPOS_DIR/$repo"
 done
 
 ## HAND OFF ##
