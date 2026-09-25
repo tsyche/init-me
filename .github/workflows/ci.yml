@@ -18,7 +18,7 @@ jobs:
         os: [ubuntu-24.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: shellcheck
         if: runner.os == 'Linux'
         run: shellcheck init.sh setup-all.sh scripts/*.sh tests/*.sh
