@@ -1,0 +1,38 @@
+# One-way mirror: GitHub is the source of truth; GitLab is overwritten to match.
+# Needs the GITLAB_MIRROR_TOKEN secret (GitLab access token, write_repository).
+name: Mirror to GitLab
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  schedule:
+    - cron: '23 6 * * *' # safety net
+  workflow_dispatch:
+
+# Serialize mirrors; never cancel one mid-push.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Push main and tags to GitLab
+        env:
+          GITLAB_MIRROR_TOKEN: ${{ secrets.GITLAB_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${GITLAB_MIRROR_TOKEN:?Set the GITLAB_MIRROR_TOKEN secret}"
+          git push --force "https://oauth2:${GITLAB_MIRROR_TOKEN}@gitlab.com/${GITHUB_REPOSITORY}.git" refs/heads/main:refs/heads/main
+          git push --force "https://oauth2:${GITLAB_MIRROR_TOKEN}@gitlab.com/${GITHUB_REPOSITORY}.git" --tags
